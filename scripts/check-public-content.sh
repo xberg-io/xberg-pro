@@ -22,6 +22,16 @@ patterns=(
   'How we deploy Xberg Enterprise'
   '\.rs:[0-9]+'
   '\.ts:[0-9]+'
+  '\busage_events\b'
+  '\brag_audit_events\b'
+  'data_room_limit_overrides'
+  'xberg_deployment_bridge'
+  '\$KV\.'
+  '\$JS\.API'
+  'SEGMENT_WRITE_KEY'
+  'GA4_(MEASUREMENT_ID|API_SECRET)'
+  'XBERG_INTERNAL_EMAIL_DOMAINS'
+  'pay-per-page'
 )
 
 files=()
