@@ -1,7 +1,121 @@
 ---
 title: Xberg Pro and Enterprise
-description: Documentation for Xberg Pro and Xberg Enterprise.
+description: Self-hosted document intelligence on one engine, with the queueing, storage, search, access control and audit trail your team would otherwise build.
 template: splash
+pagefind: false
 ---
 
-Documentation for Xberg Pro and Xberg Enterprise.
+<div className="xb-landing">
+  <section className="xb-landing-hero">
+    <div className="xb-landing-copy">
+      <p className="xb-eyebrow">Xberg Pro and Xberg Enterprise</p>
+      <h1>One engine. Three packages. <em>Your infrastructure.</em></h1>
+      <p className="xb-lede">
+        Core, Pro and Enterprise run the same extraction engine. Pro and Enterprise add what runs around it:
+        durable jobs, storage, search, access control, audit and scale. Self-hosted, with no phone-home.
+      </p>
+      <div className="xb-actions">
+        <a className="xb-button xb-button-primary" href="/start/pro-docker/">Self-host Pro <span aria-hidden="true">→</span></a>
+        <a className="xb-button" href="/overview/tiers/">Compare tiers <span aria-hidden="true">→</span></a>
+        <a className="xb-button" href="mailto:contact@xberg.io">Talk to us <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section className="xb-proof" aria-label="Product highlights">
+    <div><strong>107</strong><span>file formats</span></div>
+    <div><strong>371</strong><span>programming languages</span></div>
+    <div><strong>1</strong><span>container plus PostgreSQL for Pro</span></div>
+    <div><strong>0</strong><span>phone-home calls</span></div>
+  </section>
+
+  <section className="xb-landing-section">
+    <div className="xb-section-heading">
+      <p className="xb-eyebrow">One engine, three packages</p>
+      <h2>The same extraction code at every tier. <span className="xb-gradient-text">Only the platform around it changes.</span></h2>
+      <p>None of the three is a cut-down build. Choose by how much you want to run and maintain yourself.</p>
+    </div>
+
+    <div className="xb-feature-grid">
+      <article className="xb-feature">
+        <div>
+          <h3>Core</h3>
+          <p>MIT-licensed library, CLI and single-service API. You own scheduling, storage and retries. Free.</p>
+        </div>
+      </article>
+      <article className="xb-feature">
+        <div>
+          <h3>Pro</h3>
+          <p>One container plus PostgreSQL on a single node. Durable jobs, web console, crawling, search, Auto-Tune, connectors and an audit log.</p>
+        </div>
+      </article>
+      <article className="xb-feature">
+        <div>
+          <h3>Enterprise</h3>
+          <p>Everything in Pro on your Kubernetes cluster, plus teams, SAML and SCIM, managed webhooks, document versions, data rooms and horizontal scale.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section className="xb-landing-section">
+    <div className="xb-section-heading">
+      <p className="xb-eyebrow">What runs around the engine</p>
+      <h2>The work you would otherwise <span className="xb-gradient-text">build and maintain.</span></h2>
+    </div>
+
+    <div className="xb-feature-grid">
+      <article className="xb-feature xb-feature-wide">
+        <div>
+          <h3>Queueing and storage</h3>
+          <p>A durable job queue that survives restarts, retries and dead letters, with S3, GCS, Azure Blob or filesystem storage and presigned uploads.</p>
+        </div>
+      </article>
+      <article className="xb-feature">
+        <div>
+          <h3>Search and RAG</h3>
+          <p>Collections, ingest pipelines, hybrid retrieval on PostgreSQL with pgvector, and reranking.</p>
+        </div>
+      </article>
+      <article className="xb-feature">
+        <div>
+          <h3>Access control</h3>
+          <p>API keys with read and write scopes, projects isolated by row-level security, and OIDC sign-in.</p>
+        </div>
+      </article>
+      <article className="xb-feature">
+        <div>
+          <h3>Audit</h3>
+          <p>An append-only, hash-chained log of state-changing operations, with a verification routine.</p>
+        </div>
+      </article>
+      <article className="xb-feature">
+        <div>
+          <h3>Scale</h3>
+          <p>Pro scales vertically on one node. Enterprise autoscales workers on queue depth and returns them when the queue drains.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section className="xb-workflow">
+    <div className="xb-section-heading">
+      <p className="xb-eyebrow">Self-hosted by design</p>
+      <h2>Your documents stay <span className="xb-gradient-text">on your hardware.</span></h2>
+    </div>
+    <ol>
+      <li><div><h3>Run it</h3><p>Docker Compose or Helm, on infrastructure you operate.</p></div></li>
+      <li><div><h3>License it offline</h3><p>A signed token valid for 180 days plus 30 days of grace. No activation server, no usage beacon.</p></div></li>
+      <li><div><h3>Keep control</h3><p>Features that call an external model are off until you supply a provider and key.</p></div></li>
+    </ol>
+  </section>
+
+  <section className="xb-landing-cta">
+    <p className="xb-eyebrow">Get started</p>
+    <h2>Put the engine to work <span className="xb-gradient-text">in an afternoon.</span></h2>
+    <div className="xb-actions">
+      <a className="xb-button xb-button-primary" href="/start/pro-docker/">Self-host Pro <span aria-hidden="true">→</span></a>
+      <a className="xb-button" href="/overview/pricing-and-licensing/">Pricing and licensing <span aria-hidden="true">→</span></a>
+    </div>
+  </section>
+</div>
