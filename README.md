@@ -104,7 +104,7 @@ Follow [Install Xberg Pro with Docker Compose](https://pro.xberg.io/start/pro-do
 
 ## Licensing and contact
 
-Pricing is per license, by contract. A Pro license token is verified offline and is valid for 180 days, followed by a 30-day grace period. Enterprise licensing is by agreement. Xberg makes no phone-home call and sends no usage beacon. See [Pricing and licensing](https://pro.xberg.io/overview/pricing-and-licensing/).
+Both products work the same way: you sign a license agreement, Xberg issues your license, and you run the product. Pricing is per license, by contract. A Pro license token is verified offline and is valid for 180 days, followed by a 30-day grace period. An Enterprise license comes with access to the Enterprise images. Xberg makes no phone-home call and sends no usage beacon. See [Pricing and licensing](https://pro.xberg.io/overview/pricing-and-licensing/).
 
 To buy a license or arrange a trial, write to [contact@xberg.io](mailto:contact@xberg.io). Report security issues through the [security policy](https://github.com/xberg-io/xberg-pro/security/policy), not a public issue.
 

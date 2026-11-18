@@ -5,7 +5,13 @@ description: How Xberg Pro and Enterprise are priced and licensed, how the offli
 
 ## Licensing model
 
-Xberg Core is MIT-licensed and free for commercial use. Xberg Pro and Xberg Enterprise are proprietary software, licensed by written agreement. They are not open source.
+Xberg Core is MIT-licensed and free for commercial use. Xberg Pro and Xberg Enterprise are proprietary software and work the same way:
+
+1. You sign a license agreement with Xberg.
+2. Xberg issues your license.
+3. You install and run the product under that license.
+
+For Pro, the license is a signed token that the image verifies offline (see below). For Enterprise, the license comes with your agreement together with access to the Enterprise images.
 
 Pro is one product. A valid license turns on everything Pro does, and nothing is sold as an add-on. Capabilities such as RAG and Auto-Tune are operator switches, not separate entitlements.
 
@@ -27,9 +33,9 @@ Renew before the 180 days end. Alert on the license metrics so that grace is a s
 
 ## Buy or trial
 
-Email [contact@xberg.io](mailto:contact@xberg.io) to buy a license or to arrange a trial. Say which product you are interested in, how you plan to deploy it and roughly how many documents you process. Xberg replies with an agreement and an issued token.
+Email [contact@xberg.io](mailto:contact@xberg.io) to buy a license or to arrange a trial. Say which product you are interested in, how you plan to deploy it and roughly how many documents you process. Xberg replies with an agreement. Once it is signed, you receive your license.
 
-The `ghcr.io/xberg-io/xberg-pro` image is public and multi-arch (`linux/amd64` and `linux/arm64`), but it does not start without a valid token. Enterprise images and charts are private and are shared by arrangement.
+The `ghcr.io/xberg-io/xberg-pro` image is public and multi-arch (`linux/amd64` and `linux/arm64`), but it does not start without a valid token. The Enterprise Helm chart is public; the Enterprise images are provided with your license.
 
 ## Third-party components
 
