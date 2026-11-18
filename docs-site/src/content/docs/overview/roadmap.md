@@ -9,7 +9,7 @@ This page lists capabilities that are not generally available today. It carries 
 
 ### Hosted API
 
-A pay-per-page API on the same engine, with a free tier. It is built and tested. Pro and Enterprise stay self-hosted, and no hosted service is offered today.
+A pay-per-page API on the same engine, with a free tier. No hosted service is offered today, and Pro and Enterprise stay self-hosted.
 
 ### Finer-grained API key scopes and custom roles
 
@@ -23,10 +23,9 @@ Delegation of credential encryption to your own KMS or Vault. Today, connected-s
 
 These are boundaries of the shipped product, not commitments to change them.
 
-- **No answer generation.** Retrieval is the whole RAG surface. There is no chat or answer endpoint, so the generation model stays yours.
+- **No answer generation.** Retrieval is the whole RAG surface. Xberg has no chat or answer endpoint, so the generation model stays yours.
 - **No audio or video transcription on Pro or Enterprise.** Both reject audio and video input. Use Core for transcription.
 - **No browser rendering on Pro.** Pro crawls over plain HTTP. Enterprise runs rendered crawls.
-- **Monthly page and job limits are reported, not enforced.** Usage reporting shows consumption, but no request is refused against a monthly cap.
 
 ## Influence the roadmap
 

@@ -20,7 +20,7 @@ Pro verifies a signed token offline.
 - **Validity.** Each token is issued for 180 days.
 - **Grace.** After expiry, a grace period keeps the service running while it logs warnings on every evaluation. The grace length travels in the token and is 30 days for current issuance.
 - **After grace.** The service stops accepting new work, drains the work in flight and exits.
-- **No phone-home.** Verification runs against a key inside the image. There is no activation server, no heartbeat and no usage beacon, including in air-gapped installs.
+- **No phone-home.** Verification runs against a key inside the image. Xberg runs no activation server, heartbeat or usage beacon, including in air-gapped installs.
 - **Pre-flight check.** A verification command in the image catches a bad or expired token before it reaches a cluster.
 
 Renew before the 180 days end. Alert on the license metrics so that grace is a safety margin, not a routine. Token mechanics, the verification command, metrics and renewal are in [Licensing](/reference/licensing/).
@@ -29,7 +29,7 @@ Renew before the 180 days end. Alert on the license metrics so that grace is a s
 
 Email [contact@xberg.io](mailto:contact@xberg.io) to buy a license or to arrange a trial. Say which product you are interested in, how you plan to deploy it and roughly how many documents you process. Xberg replies with an agreement and an issued token.
 
-The `ghcr.io/xberg-io/xberg-pro` image is publicly pullable, but it does not start without a valid token. Enterprise images and charts are private and are shared by arrangement.
+The `ghcr.io/xberg-io/xberg-pro` image is public and multi-arch (`linux/amd64` and `linux/arm64`), but it does not start without a valid token. Enterprise images and charts are private and are shared by arrangement.
 
 ## Third-party components
 

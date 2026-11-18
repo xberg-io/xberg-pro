@@ -60,25 +60,28 @@ The SDKs target either a Pro or an Enterprise deployment with the same client li
 
 ## Jobs, storage and operations
 
-| Capability                                               | Core         | Pro                     | Enterprise           |
-| -------------------------------------------------------- | ------------ | ----------------------- | -------------------- |
-| Durable job queue and history that survive restart       | No           | Yes                     | Yes                  |
-| Object storage: S3, GCS, Azure Blob, filesystem          | No           | Yes                     | Yes                  |
-| Presigned uploads: presign, upload, confirm              | No           | Yes                     | Yes                  |
-| Result cache                                             | On disk      | Disk, plus object store | Shared, cluster-wide |
-| API keys and multiple projects                           | No           | Yes                     | Yes                  |
-| Curated extraction presets                               | No           | Yes                     | Yes                  |
-| Saved presets                                            | No           | Yes                     | Yes                  |
-| Extraction settings stored on a saved preset             | No           | No                      | Yes                  |
-| Project extraction defaults                              | No           | No                      | Yes                  |
-| Auto-Tune: parameter search against your corpus          | No           | Yes                     | Yes                  |
-| Append-only, hash-chained audit log                      | No           | Yes                     | Yes                  |
-| Prometheus metrics, OpenTelemetry traces and logs        | Opt-in build | Yes                     | Yes                  |
-| Prebuilt Grafana dashboards                              | No           | Yes                     | Yes                  |
-| Data-policy controls: disable RAG and extraction caching | No           | Yes                     | Yes                  |
-| Sandbox extraction                                       | No           | No                      | Yes                  |
+| Capability                                                          | Core         | Pro                     | Enterprise           |
+| ------------------------------------------------------------------- | ------------ | ----------------------- | -------------------- |
+| Durable job queue and history that survive restart                  | No           | Yes                     | Yes                  |
+| Object storage: S3, GCS, Azure Blob, filesystem                     | No           | Yes                     | Yes                  |
+| Presigned uploads: presign, upload, confirm                         | No           | Yes                     | Yes                  |
+| Result cache                                                        | On disk      | Disk, plus object store | Shared, cluster-wide |
+| API keys and multiple projects                                      | No           | Yes                     | Yes                  |
+| Curated extraction presets                                          | No           | Yes                     | Yes                  |
+| Saved presets                                                       | No           | Yes                     | Yes                  |
+| Extraction settings stored on a saved preset                        | No           | No                      | Yes                  |
+| Project extraction defaults                                         | No           | No                      | Yes                  |
+| Auto-Tune: parameter search against your corpus                     | No           | Yes                     | Yes                  |
+| Append-only, hash-chained audit log                                 | No           | Yes                     | Yes                  |
+| Prometheus metrics, OpenTelemetry traces and logs                   | Opt-in build | Yes                     | Yes                  |
+| Grafana dashboards, delivered through support                       | No           | Yes                     | Yes                  |
+| High-availability profiles: red/green generations, fenced promotion | No           | Yes                     | Yes                  |
+| Data-policy controls: disable RAG and extraction caching            | No           | Yes                     | Yes                  |
+| Sandbox extraction                                                  | No           | No                      | Yes                  |
 
 Auto-Tune searches your own corpus for the settings that extract it best, then promotes the winner to a reusable profile applied at extraction time. See [Auto-Tune](/guides/auto-tune/) and [Presets](/guides/presets/).
+
+Pro enforces monthly job and page quotas per project. A request over quota gets `429 quota_exceeded` with a `Retry-After` header until the next UTC month, and quotas are unlimited when unset. Replicated deployments need a customer-managed load balancer. See [Deployment operator](/operate/deployment-operator/).
 
 ## Search and retrieval
 
@@ -116,7 +119,7 @@ Pro crawls over plain HTTP. A crawl that needs a rendered page, such as a browse
 | Single sign-on: any OIDC provider, email-domain allowlisting   | No   | Yes | Yes        |
 | SAML 2.0 and SCIM provisioning                                 | No   | No  | Yes        |
 | Per-project isolation, enforced in the database on every query | No   | Yes | Yes        |
-| Usage reporting                                                | No   | Yes | Yes        |
+| Usage reporting and monthly job and page quotas                | No   | Yes | Yes        |
 | Team members, invitations, owner and member roles              | No   | No  | Yes        |
 | Cross-project usage analytics                                  | No   | No  | Yes        |
 | API key regeneration                                           | No   | No  | Yes        |

@@ -3,7 +3,7 @@ title: What Pro replaces
 description: The infrastructure and maintenance work a team stops doing when it moves from the Core library to Xberg Pro.
 ---
 
-With Core, you embed an excellent extraction engine and build everything around it. Pro replaces that surrounding work with a single supported product. The cost of building it once is the smaller part. The larger part is maintaining it for as long as the system runs.
+With Core, you embed the extraction engine and build everything around it. Pro replaces that surrounding work with one supported product, so you stop maintaining it.
 
 ## The work Pro takes over
 
@@ -17,7 +17,7 @@ With Core, you embed an excellent extraction engine and build everything around 
 | Connectors to the places documents live               | Google Drive, Dropbox, OneDrive, SharePoint, Notion, Confluence, S3, GCS, Azure Blob and SFTP. See [Source connectors](/guides/source-connectors/). |
 | A crawler wired into extraction                       | Robots.txt-aware crawling with per-domain rate limits. See [Crawling](/guides/crawling/).                                                           |
 | Tuning for your document mix                          | Auto-Tune searches your corpus for the settings that extract it best. See [Auto-Tune](/guides/auto-tune/).                                          |
-| Dashboards and metrics                                | Prometheus metrics, OpenTelemetry traces and prebuilt Grafana dashboards. See [Observability](/observability/).                                     |
+| Dashboards and metrics                                | Prometheus metrics and OpenTelemetry traces, with Grafana dashboards delivered through support. See [Observability](/observability/).               |
 | A console your team can use without going through you | A web console with a playground, job history and settings.                                                                                          |
 
 ## What does not change

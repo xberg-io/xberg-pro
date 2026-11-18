@@ -56,4 +56,4 @@ Telemetry (traces, metrics and logs) goes to the OTLP collector you name in `OTE
 
 ## Certifications
 
-Xberg does not hold SOC 2 or ISO 27001 certification, and no audit is in progress. A self-hosted deployment runs inside your own certified boundary and inherits your controls.
+Xberg does not hold SOC 2 or ISO 27001 certification. A self-hosted deployment runs inside your own certified boundary and inherits your controls.

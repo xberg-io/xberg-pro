@@ -41,20 +41,26 @@ curl -H "Authorization: Bearer $XBERG_API_KEY" \
   -F 'webhook={"url":"https://example.com/webhooks/xberg"}'
 ```
 
+The SDKs also need your deployment's base URL. See [SDKs](/start/sdks/) for the exact constructor options.
+
 ```python title="Python"
 import os
 from xberg_io_sdk import XbergClient
 
-with XbergClient(api_key=os.environ["XBERG_API_KEY"]) as client:
+with XbergClient(
+    api_key=os.environ["XBERG_API_KEY"],
+    base_url="https://xberg.example.com",
+) as client:
     ...
 ```
 
 ```ts title="TypeScript"
-const client = new XbergClient({ apiKey: process.env.XBERG_API_KEY! });
-```
+import { XbergClient } from "@xberg-io/sdk";
 
-```go title="Go"
-client, _ := xberg.New(xberg.WithAPIKey(os.Getenv("XBERG_API_KEY")))
+const client = new XbergClient({
+  apiKey: process.env.XBERG_API_KEY!,
+  baseUrl: "https://xberg.example.com",
+});
 ```
 
 See the [SDK documentation](https://docs.sdks.xberg.io) for the full client API and [SDKs](/start/sdks/) for setup. Manage keys in [Projects and API keys](/guides/projects-and-api-keys/).
@@ -73,6 +79,6 @@ API keys authenticate programs. People sign in to the web console through any OI
 
 - `401 Unauthorized`: the bearer token is missing, malformed or matches no active key.
 - `403 Forbidden`: the key is valid, but the project does not own the requested resource, or a `read` key attempted a write.
-- `429 Too Many Requests`: the caller exceeded a rate limit, or a RAG collection reached its document quota on ingest.
+- `429 Too Many Requests`: the caller exceeded a rate limit, a project exhausted its monthly quota, or a RAG collection reached its document quota on ingest.
 
-A project row records monthly job and page limits. They appear in usage reports, but no request is refused against them, so neither can produce a `429`.
+On Pro, a project's monthly job and page quotas also produce `429` with error code `quota_exceeded`. The response carries `Retry-After` with the seconds until the next UTC calendar month. A quota is unlimited when unset.

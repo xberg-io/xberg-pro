@@ -30,7 +30,7 @@ Poll for quick scripts and use webhooks in production. See the [quickstart](/sta
 
 Pro runs as a single container next to PostgreSQL and your object storage.
 
-- **Dispatch.** Jobs run in-process against a bounded worker pool. There is no message bus.
+- **Dispatch.** Jobs run in-process against a bounded worker pool, with no message bus.
 - **State.** PostgreSQL holds job metadata, projects, API keys and the audit log. It also stores RAG chunks and vectors through pgvector.
 - **Results.** Results land in your object storage, which can be S3, GCS, Azure Blob or the local filesystem. A local content-addressed cache avoids repeat work, and an object-store tier can back it.
 - **Tenancy.** Pro isolates projects with PostgreSQL row-level security and per-project API keys.
