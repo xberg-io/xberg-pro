@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-Xberg chains four stages. Each wraps an open-source project that you can adopt on its own, or use together in one self-hosted backend. The platform is a composable component that your agents and pipelines plug into for content and retrieval.
+Xberg chains four stages. Each wraps an open-source project that you can adopt on its own, or use together in one self-hosted backend.
 
 ## The four stages
 
@@ -45,7 +45,7 @@ Submit documents as multipart form data, or reference large files through a pres
 ```bash
 curl -X POST https://xberg.example.com/v1/extract \
   -H "Authorization: Bearer $XBERG_API_KEY" \
-  -F "documents=@research-paper.pdf"
+  -F "file=@research-paper.pdf"
 ```
 
 Limits and exceptions:

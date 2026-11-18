@@ -50,12 +50,9 @@ Outbound connections depend on your configuration.
 - **Your identity provider, only when OIDC login is configured.** Token verification fetches the issuer's JWKS. Set `OIDC_JWKS_URI` to skip discovery, or leave it unset and Xberg asks the issuer at `OIDC_ISSUER_URL`.
 - **OAuth providers, only when the integration hub is configured.** Access goes to the provider's APIs with the OAuth client you registered.
 - **Crawling.** A crawl job fetches the URLs you submit.
-- **Product analytics, only when you set a sink.** Usage events go out only when `SEGMENT_WRITE_KEY`, or `GA4_MEASUREMENT_ID` together with `GA4_API_SECRET`, is set. All are unset by default, so a self-hosted deployment sends no usage events.
 
-License verification is local. Pro checks the Ed25519 signature of `XBERG_LICENSE_KEY` against a public key inside the image at start and re-checks it hourly. A license is required to run, and the check never calls home. See [Licensing](/reference/licensing/).
+License verification is local. Pro checks the Ed25519 signature of `XBERG_LICENSE_KEY` against a public key inside the image at start and re-checks it hourly. A license is required to run. See [Licensing](/reference/licensing/).
 
 Telemetry (traces, metrics and logs) goes to the OTLP collector you name in `OTEL_EXPORTER_OTLP_ENDPOINT`. With the variable unset, logs stay on stdout and metrics stay on the local `/metrics` endpoint.
 
-## Certifications
-
-Xberg does not hold SOC 2 or ISO 27001 certification. A self-hosted deployment runs inside your own certified boundary and inherits your controls.
+For certifications, see [Security](/overview/security/#certifications).

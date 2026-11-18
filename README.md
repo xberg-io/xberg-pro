@@ -98,13 +98,13 @@ volumes:
   xberg-data:
 ```
 
-The four database logins come from a PostgreSQL role bootstrap that ships in the Pro chart archive, and the full stack adds the PostgreSQL service and a one-shot bootstrap container. The console sets secure session cookies by default, so sign-in over plain HTTP needs `SESSION_COOKIE_SECURE=false`.
+The database logins come from a PostgreSQL role bootstrap that ships in the Pro chart archive, and the full stack adds the PostgreSQL service and a one-shot bootstrap container. The console sets secure session cookies by default, so sign-in over plain HTTP needs `SESSION_COOKIE_SECURE=false`.
 
 Follow [Install Xberg Pro with Docker Compose](https://pro.xberg.io/start/pro-docker/) for the complete file and first start. For Kubernetes, see the [Pro Helm guide](https://pro.xberg.io/start/pro-helm/) and the [Enterprise Helm guide](https://pro.xberg.io/start/enterprise-helm/).
 
 ## Licensing and contact
 
-Pricing is per license, by contract. A license token is verified offline and is valid for 180 days, followed by a 30-day grace period. Xberg makes no phone-home call and sends no usage beacon. See [Pricing and licensing](https://pro.xberg.io/overview/pricing-and-licensing/).
+Pricing is per license, by contract. A Pro license token is verified offline and is valid for 180 days, followed by a 30-day grace period. Enterprise licensing is by agreement. Xberg makes no phone-home call and sends no usage beacon. See [Pricing and licensing](https://pro.xberg.io/overview/pricing-and-licensing/).
 
 To buy a license or arrange a trial, write to [contact@xberg.io](mailto:contact@xberg.io). Report security issues through the [security policy](https://github.com/xberg-io/xberg-pro/security/policy), not a public issue.
 

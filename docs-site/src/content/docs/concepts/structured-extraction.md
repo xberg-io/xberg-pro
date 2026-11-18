@@ -141,7 +141,7 @@ The template can use `schema`, which is your JSON Schema, and `content`, which i
 
 ## Error handling
 
-When extraction fails, the job status is `"failed"` and the `errors` array lists `JobResultError` entries with `error_type`, `message` and optional `code`, `index` and `source`. A `code` in that entry is an integer assigned by the engine. The dotted string codes such as `rag.rerank.unavailable` belong to the error envelope on 4xx and 5xx responses, which is a different field.
+When extraction fails, the job status is `"failed"` and the `errors` array lists error entries with `error_type`, `message` and optional `code`, `index` and `source`. A `code` in that entry is an integer assigned by the engine. The dotted string codes such as `rag.rerank.unavailable` belong to the error envelope on 4xx and 5xx responses, which is a different field.
 
 If a job fails, loosen an over-restrictive schema or try a different provider.
 

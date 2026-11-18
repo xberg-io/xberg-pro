@@ -3,7 +3,7 @@ title: Moving between tiers
 description: How to move from Core to Pro, and from Pro to Enterprise, without rewriting your integration.
 ---
 
-Pro and Enterprise are built from a single codebase and share one set of API types. Moving up is a deployment change, not a rewrite.
+Moving up is a deployment change, not a rewrite.
 
 ## Core to Pro
 
@@ -16,9 +16,7 @@ Pro wraps the same engine in a service. Your extraction settings and result shap
 
 ## Pro to Enterprise
 
-Enterprise serves the whole of Pro's API apart from two Pro-specific calls: the license endpoint and Pro's local-storage upload. A continuously enforced check keeps the surface aligned, so the API you build against does not move underneath you.
-
-The SDKs are dual-target. One client library points at either deployment, so changing tiers means changing the base URL and credentials.
+Enterprise serves all of Pro's API except the license endpoint and Pro's local-storage upload. The SDKs use one client for both, so changing tiers means changing the base URL and credentials.
 
 What Enterprise adds is the multi-user and multi-tenant layer:
 

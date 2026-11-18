@@ -7,21 +7,15 @@ This page lists capabilities that are not generally available today. It carries 
 
 ## Planned
 
-### Hosted API
+### Finer-grained API key scopes
 
-A pay-per-page API on the same engine, with a free tier. No hosted service is offered today, and Pro and Enterprise stay self-hosted.
+API keys carry a `read` or `write` scope. Enterprise role-bound keys restrict a key to one custom role; per-capability scopes on standalone keys are planned. See [Authentication](/concepts/authentication/) and [Teams and roles](/guides/teams-and-roles/).
 
-### Finer-grained API key scopes and custom roles
+### Customer-managed key delegation
 
-API keys today carry a `read` or `write` scope, and Enterprise teams use fixed owner and member roles. Scopes tied to individual capabilities and custom roles are on the roadmap. See [Authentication](/concepts/authentication/) and [Teams and roles](/guides/teams-and-roles/).
-
-### Customer-managed encryption keys
-
-Delegation of credential encryption to your own KMS or Vault. Today, connected-source credentials are encrypted with a key encryption key you supply to the deployment. See [Security](/overview/security/).
+Delegating integration-credential encryption (`INTEGRATION_KEK`) to your own KMS or Vault. Today you supply the key encryption key to the deployment. See [Security](/overview/security/).
 
 ## Current limits
-
-These are boundaries of the shipped product, not commitments to change them.
 
 - **No answer generation.** Retrieval is the whole RAG surface. Xberg has no chat or answer endpoint, so the generation model stays yours.
 - **No audio or video transcription on Pro or Enterprise.** Both reject audio and video input. Use Core for transcription.

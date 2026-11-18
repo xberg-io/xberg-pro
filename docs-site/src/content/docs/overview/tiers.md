@@ -14,7 +14,7 @@ All three are self-hosted. You run them on your own infrastructure, and document
 | License       | MIT                        | Proprietary                    | Proprietary                                   |
 | Availability  | Released                   | Released                       | By arrangement, with private images and chart |
 | Runs as       | Library, CLI, Docker, Helm | Docker Compose or Helm         | Helm, on your Kubernetes cluster              |
-| Scale ceiling | One process                | One node                       | A cluster                                     |
+| Scale ceiling | One process                | One node by default            | A cluster                                     |
 | Price         | Free                       | Per license, by contract       | Per license, by contract                      |
 | Support       | GitHub, Discord            | Email, dedicated Slack channel | Private channel, contractual SLA              |
 
@@ -33,7 +33,7 @@ Identical in every tier.
 | Capability                                              | Core | Pro | Enterprise |
 | ------------------------------------------------------- | ---- | --- | ---------- |
 | 107 file formats, 141 extensions                        | Yes  | Yes | Yes        |
-| 371 programming languages (tree-sitter)                 | Yes  | Yes | Yes        |
+| 371 programming languages (tree-sitter) <sup>1</sup>    | Yes  | Yes | Yes        |
 | OCR: Tesseract, PaddleOCR, EasyOCR, vision models       | Yes  | Yes | Yes        |
 | Layout and table models, formula recognition            | Yes  | Yes | Yes        |
 | Tables, metadata, schema-driven structured extraction   | Yes  | Yes | Yes        |
@@ -42,19 +42,21 @@ Identical in every tier.
 | Chunking and embeddings                                 | Yes  | Yes | Yes        |
 | Audio and video transcription                           | Yes  | No  | No         |
 
+<sup>1</sup> Pro downloads grammars on first use, so code-file ingestion is unavailable on an air-gapped Pro install. Enterprise worker images include them. See [Air-gapped installation](/operate/air-gapped/).
+
 Pro and Enterprise reject audio and video input when you submit it, before any bytes upload. Run Core directly when you need transcription.
 
 ## Deployment
 
-| Capability                                     | Core           | Pro             | Enterprise  |
-| ---------------------------------------------- | -------------- | --------------- | ----------- |
-| In-process library, 15 languages               | Yes            | Via Core        | Via Core    |
-| CLI and MCP server                             | Yes            | Via Core        | Via Core    |
-| REST API                                       | Yes            | Yes             | Yes         |
-| Client SDKs: Python, TypeScript, Go            | No             | Yes             | Yes         |
-| Docker image                                   | Yes            | Yes             | Yes         |
-| Helm chart                                     | Single service | Single instance | Distributed |
-| Web console: playground, job history, settings | No             | Yes             | Yes         |
+| Capability                                     | Core           | Pro                        | Enterprise  |
+| ---------------------------------------------- | -------------- | -------------------------- | ----------- |
+| In-process library, 15 languages               | Yes            | Via Core                   | Via Core    |
+| CLI and MCP server                             | Yes            | Via Core                   | Via Core    |
+| REST API                                       | Yes            | Yes                        | Yes         |
+| Client SDKs: Python, TypeScript, Go            | No             | Yes                        | Yes         |
+| Docker image                                   | Yes            | Yes                        | Yes         |
+| Helm chart                                     | Single service | Single instance by default | Distributed |
+| Web console: playground, job history, settings | No             | Yes                        | Yes         |
 
 The SDKs target either a Pro or an Enterprise deployment with the same client library. Core is MIT-licensed, so Pro and Enterprise customers can use the library and CLI alongside their deployment at no cost. See [SDKs](/start/sdks/).
 
@@ -144,7 +146,7 @@ See [Authentication](/concepts/authentication/), [SAML single sign-on](/guides/s
 
 - **Throughput depends on the workload.** A text-native PDF and a 300-page scan that needs OCR differ by orders of magnitude. Treat the table as concurrency capacity, not a page rate. Xberg will size a deployment against a sample of your own documents.
 - **PDFs that need layout inference process one at a time per node.** Raising the thread budget adds no parallel documents for that workload, so add nodes instead. This affects all three tiers.
-- **Pro scales vertically, Enterprise horizontally.** Pro's ceiling is the largest node you are willing to run. Enterprise adds workers on queue depth and returns them when the queue drains.
+- **Pro scales vertically, Enterprise horizontally.** Pro's default ceiling is the largest node you are willing to run. A replicated extraction-only profile (`deployment.mode=replicated`, 2 to 32 replicas) also exists; see [Deployment operator](/operate/deployment-operator/). Enterprise adds workers on queue depth and returns them when the queue drains.
 - **Pro and Enterprise accept the same request.** The batch size, parallelism and time budget match. The difference is how far each scales out behind the request.
 - Every limit above is a default, and operators can configure it. The shipped Pro container sets parallelism to 4.
 
