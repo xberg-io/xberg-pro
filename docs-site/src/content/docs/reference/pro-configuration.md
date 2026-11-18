@@ -22,7 +22,7 @@ A malformed or out-of-range value stops startup and names the variable. Pro neve
 | Allow long extractions                        | [Timeouts and shutdown](#timeouts-and-shutdown), [Long extractions](#long-extractions)                                                      |
 | Use models for RAG, OCR and structured output | [RAG runtime](#rag-runtime), [Structured extraction](#structured-extraction), [Extraction models and limits](#extraction-models-and-limits) |
 | Serve a private MCP endpoint                  | [Private MCP listener](#private-mcp-listener)                                                                                               |
-| Monitor and log                               | [OTLP export](#otlp-trace-log-and-metric-export), [Logging](#logging-and-deployment-label)                                                  |
+| Monitor and log                               | [OTLP export](#otlp-trace-log-and-metric-export), [Logging](#logging)                                                                       |
 
 ## Required
 
@@ -103,19 +103,21 @@ Set only the group that matches `STORAGE_PROVIDER`.
 
 ## Authentication
 
-See [Authentication](/concepts/authentication/) for how API keys, the bootstrap admin key and dashboard sign-in fit together.
+See [Authentication](/concepts/authentication/) for how API keys, the bootstrap admin key and web console sign-in fit together.
 
 | Variable                | Default    | Description                                                                                                                                                                               |
 | ----------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `XBERG_ADMIN_KEY`       | none       | Bearer token for control-plane requests such as preset management and the audit log. Without it, control endpoints return `401`. Use the `kz_` prefix.                                    |
 | `PRO_AUTH_MODE`         | `required` | `required` enforces API keys and, when configured, OIDC sign-in. `disabled` serves one unauthenticated local workspace. Use `disabled` only for evaluation and restrict network access.   |
-| `SESSION_COOKIE_SECURE` | `true`     | Send the dashboard session cookie over HTTPS only. Set `false` only for a plain-HTTP evaluation. Pro logs a warning while it is off.                                                      |
+| `SESSION_COOKIE_SECURE` | `true`     | Send the web console session cookie over HTTPS only. Set `false` only for a plain-HTTP evaluation. Pro logs a warning while it is off.                                                    |
 | `PRO_RAG_ENABLED`       | `true`     | Start the RAG runtime at boot. `false` makes every `/v1/rag/*` request return `404` with `rag.disabled`. A valid license grants RAG, so this saves startup cost and does not gate access. |
 | `PRO_AUTO_TUNE_ENABLED` | `true`     | Start the auto-tune runtime at boot. `false` makes `/v1/auto-tune` and `/v1/tuning-profiles` return `404` with `auto_tune.disabled`.                                                      |
 
-### Dashboard sign-in with OIDC
+<a id="dashboard-sign-in-with-oidc"></a>
 
-The bootstrap API key authenticates REST requests. Human dashboard access needs an identity provider. An API-only install says so on its sign-in page.
+### Web console sign-in with OIDC
+
+The bootstrap API key authenticates REST requests. Human web console access needs an identity provider. An API-only install says so on its sign-in page.
 
 | Variable                    | Default | Description                                                                                                                                                            |
 | --------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -129,7 +131,7 @@ The bootstrap API key authenticates REST requests. Human dashboard access needs 
 | `PRO_ADMIN_EMAILS`          | empty   | Comma-separated instance admins. No first sign-in becomes admin. With this empty, only `XBERG_ADMIN_KEY` reaches the control plane, and Pro logs a warning at startup. |
 | `OIDC_HTTP_TIMEOUT_SECS`    | 5       | Timeout for each discovery and JWKS request, 1 to 120. Raise it for a slow identity provider or egress proxy.                                                          |
 
-Register a public OIDC client with the authorization-code flow and PKCE at your identity provider. Register the dashboard's exact `/auth/callback` URL as an allowed redirect. The issuer must be reachable from both the browser and Pro, and must allow the dashboard origin.
+Register a public OIDC client with the authorization-code flow and PKCE at your identity provider. Register the web console's exact `/auth/callback` URL as an allowed redirect. The issuer must be reachable from both the browser and Pro, and must allow the web console origin.
 
 With Docker Compose, save this override as `compose.oidc.yml`. Replace the example addresses and client ID, and use the service name from your Compose file in place of `pro`:
 
@@ -158,14 +160,13 @@ The three `NEXT_PUBLIC_OIDC_*` values are public client settings that the browse
 
 Source connectors and their OAuth flows. See [Source connectors](/guides/source-connectors/).
 
-| Variable                              | Default                         | Description                                                                                                                                                                                |
-| ------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `INTEGRATION_KEK`                     | empty                           | Base64 key of 32 bytes that encrypts stored credentials (AES-256-GCM). Set it together with `INTEGRATION_STATE_SECRET`. With both unset, the hub is off and its OAuth routes return `503`. |
-| `INTEGRATION_STATE_SECRET`            | empty                           | Base64 key of 32 bytes that signs OAuth state tokens. Pro refuses to start when only one of the two keys is set or either is not 32 bytes of base64.                                       |
-| `INTEGRATION_KEK_PREVIOUS`            | empty                           | The outgoing key during a rotation. See [Rotating the integration KEK](#rotating-the-integration-kek).                                                                                     |
-| `OAUTH_CALLBACK_BASE_URL`             | `http://localhost:8080` / empty | Public base URL for OAuth redirects, such as `https://api.example.com`. The callback is `/v1/integrations/oauth/callback` under it.                                                        |
-| `FRONTEND_BASE_URL`                   | `http://localhost:3000`         | Dashboard URL that users return to after OAuth.                                                                                                                                            |
-| `XBERG_ALLOW_INSECURE_OAUTH_CALLBACK` | `false`                         | Allow HTTP callbacks on non-localhost hosts. Use it for testing only.                                                                                                                      |
+| Variable                   | Default                         | Description                                                                                                                                                                                |
+| -------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `INTEGRATION_KEK`          | empty                           | Base64 key of 32 bytes that encrypts stored credentials (AES-256-GCM). Set it together with `INTEGRATION_STATE_SECRET`. With both unset, the hub is off and its OAuth routes return `503`. |
+| `INTEGRATION_STATE_SECRET` | empty                           | Base64 key of 32 bytes that signs OAuth state tokens. Pro refuses to start when only one of the two keys is set or either is not 32 bytes of base64.                                       |
+| `INTEGRATION_KEK_PREVIOUS` | empty                           | The outgoing key during a rotation. See [Rotating the integration KEK](#rotating-the-integration-kek).                                                                                     |
+| `OAUTH_CALLBACK_BASE_URL`  | `http://localhost:8080` / empty | Public base URL for OAuth redirects, such as `https://api.example.com`. The callback is `/v1/oauth/callback` under it. Register that exact URL at the provider.                            |
+| `FRONTEND_BASE_URL`        | `http://localhost:3000`         | Web console URL that users return to after OAuth.                                                                                                                                          |
 
 ### Integration sync
 
@@ -197,14 +198,9 @@ Scheduled source-connector sync is off by default. Each integration also needs a
 | `integration_kek_rewrap_complete`       | `1` when `INTEGRATION_KEK_PREVIOUS` can be removed.                                                                      |
 | `integration_kek_rewrap_failures_total` | Count of failing rows, labeled `reason` (`unreadable`, `write_conflict`).                                                |
 
-The sweep records the reason on every row it cannot migrate, in `oauth_connections.key_rotation_error` and `integrations.key_rotation_error`, and logs one warning per stuck row while the backlog is above zero. No API endpoint lists them. Query the columns:
+The sweep logs one warning per stuck row while the backlog is above zero and counts failures by `reason` in `integration_kek_rewrap_failures_total`.
 
-```sql
-SELECT id, project_id, provider, key_rotation_error FROM oauth_connections WHERE key_rotation_error IS NOT NULL;
-SELECT id, project_id, name, key_rotation_error FROM integrations WHERE key_rotation_error IS NOT NULL;
-```
-
-An `unreadable` row predates the previous key or names a key the deployment no longer holds. Re-enter its credentials, which stores a fresh key under the current one and clears the error on the next pass. A `write_conflict` row lost a race with a concurrent write and normally clears on the next pass.
+An `unreadable` row predates the previous key or names a key the deployment no longer holds. Re-enter its credentials, which stores a fresh key under the current one and clears the error on the next pass. A `write_conflict` row lost a race with a concurrent write and normally clears on the next pass. If a key rotation keeps reporting errors after that, contact support.
 
 ## Tuning
 
@@ -224,7 +220,6 @@ Defaults suit a small single node. Change these to size the instance, set listen
 | `CORS_ALLOWED_ORIGINS`     | empty              | Comma-separated browser origins (`scheme://host[:port]`) allowed to call the API. Empty sends no CORS headers, which suits the bundled UI. `*` allows any origin and is for local development only.                                                                  |
 | `PRO_TRUSTED_PROXY_CIDRS`  | empty              | Reverse-proxy CIDRs trusted to supply the client IP. The OAuth callback and the login rate limit use that IP. Set it together with `PRO_TRUSTED_PROXY_HOPS`.                                                                                                         |
 | `PRO_TRUSTED_PROXY_HOPS`   | empty              | Number of trusted proxy hops, including the direct peer. At least 1.                                                                                                                                                                                                 |
-| `PRO_WORKER_READINESS_URL` | unset              | Readiness URL of the embedded vector-index worker, which `/readyz` reports as the `worker` check. The image sets it, and the host must be loopback.                                                                                                                  |
 
 ### HTTP timeouts and rate limits
 
@@ -341,7 +336,7 @@ Pro sends the model name to that endpoint exactly as written, so use the name th
 
 A model on your own endpoint runs the curated-preset path. A saved preset and an inline `structured_extraction.schema` take the delegated path, which sends no endpoint and needs a model whose provider authenticates from the environment. That path also refuses a model name containing a colon.
 
-`PRO_VISION_BASE_URL` alone leaves the pipeline off and logs one warning at boot that names `XBERG_STRUCTURED_DEFAULT_MODEL`. Extraction, RAG and the dashboard keep serving.
+`PRO_VISION_BASE_URL` alone leaves the pipeline off and logs one warning at boot that names `XBERG_STRUCTURED_DEFAULT_MODEL`. Extraction, RAG and the web console keep serving.
 
 ## Extraction models and limits
 
@@ -403,34 +398,36 @@ Enrichment runs in-process. `POST /v1/enrich` accepts a submission and returns a
 
 ## Timeouts and shutdown
 
-This table lists every operator-tunable time budget. Each row points to its full description where one exists.
+This table lists the shutdown, extraction, outbound-call and SFTP time budgets.
 
-| Variable                                                                              | Default      | Description                                                                                                                                                                                                               |
-| ------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PRO_SHUTDOWN_DRAIN_SECS`                                                             | 90           | Whole shutdown budget. The HTTP drain spends from it first, then extraction, RAG and auto-tune drain together on the rest. The Helm chart rejects this variable. See [Shutdown on Helm](#shutdown-on-helm).               |
-| `PRO_SUPERVISOR_SHUTDOWN_GRACE_SECS`                                                  | 3690         | Time the supervisor waits for its children after a termination signal before it kills them. Must exceed the API drain and `VECTOR_INDEX_WORKER_SHUTDOWN_GRACE_SECS`. Chart value `supervisor.shutdownGracePeriodSeconds`. |
-| `XBERG_EXTRACTION_TIMEOUT_CEILING_SECS`                                               | 600          | Most a request's `extraction_timeout_secs` may ask for. A larger value is clamped, with a warning. See [Long extractions](#long-extractions).                                                                             |
-| `XBERG_EXTRACTION_TIMEOUT_DEFAULT_SECS`                                               | 600          | Timeout of a request that sends none. Pro wraps the extraction in this value plus 30 s. At most the ceiling. Unset, it is 600, or the ceiling when lower.                                                                 |
-| `PRO_ATTEMPT_TIMEOUT_SECS`                                                            | 900          | Replicated deployments only. Deadline of one job attempt, 30 to 86400 and greater than the ceiling. Singleton deployments ignore it.                                                                                      |
-| `XBERG_LLM_CALL_TIMEOUT_SECS`                                                         | 300          | Deadline for one LLM provider call (vision, structured extraction), including retries. 30 to 3600. It bounds a hung connection, so keep it above what a working call takes.                                               |
-| `XBERG_OCR_CALL_TIMEOUT_SECS`                                                         | 1260         | Deadline for one VLM OCR provider call, including its four attempts of 300 s. 60 to 7200 and not below `XBERG_LLM_CALL_TIMEOUT_SECS`.                                                                                     |
-| `RAG_WARMUP_TIMEOUT_SECS`, `RAG_WARMUP_INTERVAL_SECS`, `RAG_QUERY_EMBED_TIMEOUT_SECS` | 480, 900, 30 | See [RAG runtime](#rag-runtime).                                                                                                                                                                                          |
-| `SAFE_HTTP_CONNECT_TIMEOUT_SECS`                                                      | 5            | Connect timeout of the outbound client for source connectors and OAuth providers, 1 to 120, not above the total.                                                                                                          |
-| `SAFE_HTTP_READ_TIMEOUT_SECS`                                                         | 20           | Read timeout of the same client, 1 to 300, not above the total.                                                                                                                                                           |
-| `SAFE_HTTP_TOTAL_TIMEOUT_SECS`                                                        | 30           | Total timeout of the same client, 1 to 600. Webhooks and OIDC have their own timeouts.                                                                                                                                    |
-| `DB_POOL_CHECKOUT_TIMEOUT_SECS`                                                       | 30           | See [Database connections](#database-connections).                                                                                                                                                                        |
-| `SFTP_CONNECT_TIMEOUT_SECS`                                                           | 15           | TCP connect and SSH handshake budget of the SFTP connector, 1 to 120.                                                                                                                                                     |
-| `SFTP_OPERATION_TIMEOUT_SECS`                                                         | 8            | Budget for one SFTP operation (open, stat, read directory), 1 to 120 and not above the inventory and fetch budgets.                                                                                                       |
-| `SFTP_INVENTORY_TIMEOUT_SECS`                                                         | 120          | Budget for listing one SFTP source, 5 to 3600. Raise it for very large trees.                                                                                                                                             |
-| `SFTP_FETCH_TIMEOUT_SECS`                                                             | 45           | Budget for fetching one document, 5 to 1800. It bounds the largest file the connector can pull over a slow link.                                                                                                          |
-| `PRO_WEBHOOK_MAX_RETRIES`, `PRO_WEBHOOK_HTTP_TIMEOUT_SECS`                            | 5, 30        | See [Tuning](#webhooks-and-crawling).                                                                                                                                                                                     |
-| `OIDC_HTTP_TIMEOUT_SECS`                                                              | 5            | See [Dashboard sign-in with OIDC](#dashboard-sign-in-with-oidc).                                                                                                                                                          |
-| `STORAGE_PRESIGN_TTL_SECS`                                                            | 3600         | See [Storage](#storage).                                                                                                                                                                                                  |
-| `JWT_EXPIRATION_SECS`                                                                 | 604800       | See [Dashboard sign-in with OIDC](#dashboard-sign-in-with-oidc).                                                                                                                                                          |
-| `PRO_AUTO_TUNE_MAX_WALL_CLOCK_SECS`                                                   | 900          | See [Auto-tune](#auto-tune).                                                                                                                                                                                              |
-| `PRO_UPLOAD_REPLAY_GRACE_SECS`, `PRO_UPLOAD_GC_INTERVAL_SECS`                         | 86400, 60    | See [Retention](#retention).                                                                                                                                                                                              |
-| `PRO_INTEGRATION_SYNC_*_SECS`                                                         | see table    | See [Integration sync](#integration-sync).                                                                                                                                                                                |
-| `VECTOR_INDEX_*_SECS`                                                                 | see table    | See [Vector index worker](#vector-index-worker).                                                                                                                                                                          |
+| Variable                                | Default | Description                                                                                                                                                                                                               |
+| --------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PRO_SHUTDOWN_DRAIN_SECS`               | 90      | Whole shutdown budget. The HTTP drain spends from it first, then extraction, RAG and auto-tune drain together on the rest. The Helm chart rejects this variable. See [Shutdown on Helm](#shutdown-on-helm).               |
+| `PRO_SUPERVISOR_SHUTDOWN_GRACE_SECS`    | 3690    | Time the supervisor waits for its children after a termination signal before it kills them. Must exceed the API drain and `VECTOR_INDEX_WORKER_SHUTDOWN_GRACE_SECS`. Chart value `supervisor.shutdownGracePeriodSeconds`. |
+| `XBERG_EXTRACTION_TIMEOUT_CEILING_SECS` | 600     | Most a request's `extraction_timeout_secs` may ask for. A larger value is clamped, with a warning. See [Long extractions](#long-extractions).                                                                             |
+| `XBERG_EXTRACTION_TIMEOUT_DEFAULT_SECS` | 600     | Timeout of a request that sends none. Pro wraps the extraction in this value plus 30 s. At most the ceiling. Unset, it is 600, or the ceiling when lower.                                                                 |
+| `PRO_ATTEMPT_TIMEOUT_SECS`              | 900     | Replicated deployments only. Deadline of one job attempt, 30 to 86400 and greater than the ceiling. Singleton deployments ignore it.                                                                                      |
+| `XBERG_LLM_CALL_TIMEOUT_SECS`           | 300     | Deadline for one LLM provider call (vision, structured extraction), including retries. 30 to 3600. It bounds a hung connection, so keep it above what a working call takes.                                               |
+| `XBERG_OCR_CALL_TIMEOUT_SECS`           | 1260    | Deadline for one VLM OCR provider call, including its four attempts of 300 s. 60 to 7200 and not below `XBERG_LLM_CALL_TIMEOUT_SECS`.                                                                                     |
+| `SAFE_HTTP_CONNECT_TIMEOUT_SECS`        | 5       | Connect timeout of the outbound client for source connectors and OAuth providers, 1 to 120, not above the total.                                                                                                          |
+| `SAFE_HTTP_READ_TIMEOUT_SECS`           | 20      | Read timeout of the same client, 1 to 300, not above the total.                                                                                                                                                           |
+| `SAFE_HTTP_TOTAL_TIMEOUT_SECS`          | 30      | Total timeout of the same client, 1 to 600. Webhooks and OIDC have their own timeouts.                                                                                                                                    |
+| `SFTP_CONNECT_TIMEOUT_SECS`             | 15      | TCP connect and SSH handshake budget of the SFTP connector, 1 to 120.                                                                                                                                                     |
+| `SFTP_OPERATION_TIMEOUT_SECS`           | 8       | Budget for one SFTP operation (open, stat, read directory), 1 to 120 and not above the inventory and fetch budgets.                                                                                                       |
+| `SFTP_INVENTORY_TIMEOUT_SECS`           | 120     | Budget for listing one SFTP source, 5 to 3600. Raise it for very large trees.                                                                                                                                             |
+| `SFTP_FETCH_TIMEOUT_SECS`               | 45      | Budget for fetching one document, 5 to 1800. It bounds the largest file the connector can pull over a slow link.                                                                                                          |
+
+The rest live next to the feature they limit:
+
+- RAG: `RAG_WARMUP_TIMEOUT_SECS`, `RAG_WARMUP_INTERVAL_SECS` and `RAG_QUERY_EMBED_TIMEOUT_SECS` in [RAG runtime](#rag-runtime).
+- Database: `DB_POOL_CHECKOUT_TIMEOUT_SECS` in [Database connections](#database-connections).
+- Webhooks: `PRO_WEBHOOK_MAX_RETRIES` and `PRO_WEBHOOK_HTTP_TIMEOUT_SECS` in [Webhooks and crawling](#webhooks-and-crawling).
+- Sign-in: `OIDC_HTTP_TIMEOUT_SECS` and `JWT_EXPIRATION_SECS` in [Web console sign-in with OIDC](#dashboard-sign-in-with-oidc).
+- Storage: `STORAGE_PRESIGN_TTL_SECS` in [Storage](#storage).
+- Auto-tune: `PRO_AUTO_TUNE_MAX_WALL_CLOCK_SECS` in [Auto-tune](#auto-tune).
+- Uploads: `PRO_UPLOAD_REPLAY_GRACE_SECS` and `PRO_UPLOAD_GC_INTERVAL_SECS` in [Retention](#retention).
+- Source sync: `PRO_INTEGRATION_SYNC_*_SECS` in [Integration sync](#integration-sync).
+- Vector indexes: `VECTOR_INDEX_*_SECS` in [Vector index worker](#vector-index-worker).
 
 Readiness, liveness and startup probes are chart values (`livenessProbe`, `readinessProbe`, `startupProbe`) or your orchestrator's settings. The in-process readiness check allows each dependency 2 seconds, which stays below the chart's 3-second probe timeout.
 
@@ -489,6 +486,8 @@ With `docker run`, pass the same two names with `-e`. A request can still ask fo
 | `PRO_INPUT_S3_CLEANUP_ENABLED`            | `false` | Delete abandoned, never-attached extraction inputs from AWS S3 by exact object version. Same requirements as result cleanup, on the `documents/` prefix.                                                                                                                          |
 | `PRO_CONNECTOR_RESULT_REMOVAL_GRACE_SECS` | unset   | Standalone Pro only. Seconds, 0 to 315360000, that results of newly admitted S3 connector documents stay readable after the connector records the source removal. `0` expires access immediately. Unset keeps them readable. See [Source connectors](/guides/source-connectors/). |
 
+On Helm, `migrations.retainedS3ReconciliationGrants` (`verify`, `grant` or `revoke`; default `verify`) controls the maintenance identity's access for reconciling retained S3 objects. It requires Pro chart 0.7.5 or later. Use `grant` and `revoke` in separate maintenance upgrades, as described in [Result access lifetime](/operate/result-access-lifetime/).
+
 Extraction results live in object storage under `results/{project_id}/{job_id}.json` and stay until the project is erased. Pro deletes expired RAG ingest job records 7 days after submission. Upload cleanup removes expired staging data and never removes the recovery source of an accepted job. Raise the batch or project limit only when cleanup falls behind.
 
 ## Private MCP listener
@@ -514,7 +513,7 @@ Invalid values stop startup. On Helm, set the chart values instead. The chart re
 | Chart value                               | Default | Description                                                                                                                                         |
 | ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mcp.enabled`                             | `false` | Enable the listener.                                                                                                                                |
-| `mcp.mode`                                | `rag`   | `rag` or `extraction`.                                                                                                                              |
+| `mcp.mode`                                | `rag`   | `rag` or `extraction`. `extraction` requires Pro chart 0.7.5 or later. Earlier charts serve `rag` mode only.                                        |
 | `mcp.port`                                | 8095    | Listener port. It must differ from the chart's other ports and from `PRO_BIND_ADDR`.                                                                |
 | `mcp.cursorSigningKeySecret.name`, `.key` | empty   | Secret and key holding the signing key. Required when enabled.                                                                                      |
 | `migrations.mcpRagReleaseExecute`         | `false` | `rag` mode only. Grants the application login the retrieval routines during the maintenance grants Job. A reconciliation with `false` removes them. |
@@ -537,29 +536,19 @@ The chart binds the listener to `127.0.0.1:<port>`, allows `127.0.0.1:<port>` an
 
 Set the base endpoint alone to export all three signals to one collector. Set per-signal endpoints to split them.
 
-## Logging and deployment label
+## Logging
 
-| Variable                       | Default       | Description                                                                                                    |
-| ------------------------------ | ------------- | -------------------------------------------------------------------------------------------------------------- |
-| `LOG_LEVEL`                    | `info`        | `trace`, `debug`, `info`, `warn` or `error`.                                                                   |
-| `RUST_LOG`                     | `info`        | Log filter directive, for example `info,pro=debug`. It overrides `LOG_LEVEL`.                                  |
-| `XBERG_ENV`                    | `development` | Deployment label on analytics events: `development`, `staging` or `production`. Any other value stops startup. |
-| `XBERG_INTERNAL_EMAIL_DOMAINS` | empty         | Comma-separated owner email domains that analytics events treat as internal traffic.                           |
-| `ENABLE_PROFILING`             | `false`       | Serves `/debug/pprof/*` on the metrics port. The release image does not support it.                            |
+| Variable    | Default | Description                                                                   |
+| ----------- | ------- | ----------------------------------------------------------------------------- |
+| `LOG_LEVEL` | `info`  | `trace`, `debug`, `info`, `warn` or `error`.                                  |
+| `RUST_LOG`  | `info`  | Log filter directive, for example `info,pro=debug`. It overrides `LOG_LEVEL`. |
 
-## Bundled UI and image-managed variables
+## Bundled web console
 
-| Variable                                                        | Default                 | Description                                                                                                                                                |
-| --------------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BACKEND_API_URL`, `DATA_PLANE_API_URL`, `PRO_INTERNAL_API_URL` | `http://127.0.0.1:8080` | Where the bundled UI reaches the API inside the container. The image sets them. Change them only when the UI runs apart from the API.                      |
-| `NEXT_PUBLIC_*`                                                 | image build             | Browser-visible UI settings. The OIDC ones are served from `/runtime-env.js` at run time. See [Dashboard sign-in with OIDC](#dashboard-sign-in-with-oidc). |
-
-The image, the chart or the supervisor set the variables below. Do not set them by hand:
-
-- `PRO_DEPLOYMENT_MODE` (`singleton` by default, or `replicated`) and the other `PRO_DEPLOYMENT_*` variables, from the chart's `deployment.*` values.
-- `PRO_WORKER_READINESS_URL`, `METRICS_ADDR`, `VECTOR_INDEX_*` socket, broker and login wiring, and `PRO_API_ENVIRONMENT_FD`.
-- `NEXT_CACHE_ROOT`, `PORT`, `HOSTNAME` and `NODE_ENV`.
-- `XBERG_CACHE_DIR`, `XBERG_OCR_MODEL_CACHE_DIR`, `TESSDATA_PREFIX`, `TREE_SITTER_LANGUAGE_PACK_CACHE_DIR`, `HF_ENDPOINT` and `HF_HUB_OFFLINE`. See [OCR data and models](#ocr-data-and-models).
+| Variable                                                        | Default                 | Description                                                                                                                                                       |
+| --------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BACKEND_API_URL`, `DATA_PLANE_API_URL`, `PRO_INTERNAL_API_URL` | `http://127.0.0.1:8080` | Where the bundled web console reaches the API inside the container. The image sets them. Change them only when the console runs apart from the API.               |
+| `NEXT_PUBLIC_*`                                                 | image build             | Browser-visible console settings. The OIDC ones are served from `/runtime-env.js` at run time. See [Web console sign-in with OIDC](#dashboard-sign-in-with-oidc). |
 
 ## Configuration file
 
@@ -604,7 +593,7 @@ For local filesystem storage, mount a volume at `STORAGE_FS_ROOT`:
 ```bash
 docker run -v /host/path:/data/xberg \
   -e STORAGE_FS_ROOT=/data/xberg \
-  ghcr.io/xberg-io/xberg-pro:latest
+  ghcr.io/xberg-io/xberg-pro:<version>
 ```
 
 For the result cache, mount `CACHE_DIR`:
@@ -612,8 +601,10 @@ For the result cache, mount `CACHE_DIR`:
 ```bash
 docker run -v /host/cache:/var/cache/xberg \
   -e CACHE_DIR=/var/cache/xberg \
-  ghcr.io/xberg-io/xberg-pro:latest
+  ghcr.io/xberg-io/xberg-pro:<version>
 ```
+
+Replace `<version>` with the release you were given, and pin it by digest in production.
 
 ### OCR data and models
 
@@ -679,6 +670,4 @@ The default Pro profile is a one-replica StatefulSet with a `/data` PersistentVo
 
 The `extraction_only` profile supports fixed Deployment replicas and red/green generations with shared PostgreSQL and object storage. See [Deployment operator](/operate/deployment-operator/).
 
-The default singleton chart sets the claim to 100 GiB. About 20 GiB goes to model caches and the 10 GiB result cache. Accepted documents and results use the rest. Raise `persistence.size` when your retained corpus needs more than roughly 80 GiB.
-
-`persistence.size` creates fresh claims and does not resize an existing PVC. Set `persistence.claimTemplateMode: fresh` only for the initial install. Live Helm upgrades preserve the installed claim template automatically. Argo CD, GitOps and other renderers that cannot see the cluster must switch to `persistence.claimTemplateMode: existing` after the first sync and supply `persistence.existingClaimTemplate` with the captured template. Follow the capture command in [Install Pro with Helm](/start/pro-helm/). `persistence.existingClaimTemplateSize` only cross-checks that request, and size alone is rejected. To grow the volume, expand the PVC directly through a StorageClass with `allowVolumeExpansion: true` and keep the original captured template.
+The default singleton chart sets the claim to 100 GiB. `persistence.size` applies to fresh claims only and does not resize an existing one. For sizing, GitOps renders and growing the volume, see [Persistent volume](/start/pro-helm/#persistent-volume).

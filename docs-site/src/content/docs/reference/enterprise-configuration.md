@@ -15,17 +15,17 @@ With the Helm chart, set a variable in the service's `env` map: `api.env`, `back
 
 Related settings live on their own pages: storage in [Storage](/operate/storage/) and [AWS storage](/operate/aws-storage/), RAG in [RAG configuration](/operate/rag-config/), and identity in [Authentication](/concepts/authentication/). Xberg Pro has its own [configuration reference](/reference/pro-configuration/). Variables that both tiers read (database, storage, OIDC, tracing) behave the same way there.
 
-| Task                                        | Section                                                                  |
-| ------------------------------------------- | ------------------------------------------------------------------------ |
-| Connect the database and message broker     | [Database and messaging](#database-and-messaging)                        |
-| Set storage and timeouts for outbound calls | [Storage and outbound calls](#storage-and-outbound-calls)                |
-| Expose the API safely                       | [API service](#api-service)                                              |
-| Serve a private MCP endpoint                | [Private MCP listener](#private-mcp-listener)                            |
-| Run the dashboard backend, sign-in and sync | [Backend service](#backend-service)                                      |
-| Size workers and allow long extractions     | [Worker service](#worker-service), [Long extractions](#long-extractions) |
-| Tune crawling                               | [Crawling](#crawling)                                                    |
-| Deliver webhooks                            | [Webhook service](#webhook-service)                                      |
-| Run RAG                                     | [RAG service](#rag-service)                                              |
+| Task                                          | Section                                                                  |
+| --------------------------------------------- | ------------------------------------------------------------------------ |
+| Connect the database and message broker       | [Database and messaging](#database-and-messaging)                        |
+| Set storage and timeouts for outbound calls   | [Storage and outbound calls](#storage-and-outbound-calls)                |
+| Expose the API safely                         | [API service](#api-service)                                              |
+| Serve a private MCP endpoint                  | [Private MCP listener](#private-mcp-listener)                            |
+| Run the web console backend, sign-in and sync | [Backend service](#backend-service)                                      |
+| Size workers and allow long extractions       | [Worker service](#worker-service), [Long extractions](#long-extractions) |
+| Tune crawling                                 | [Crawling](#crawling)                                                    |
+| Deliver webhooks                              | [Webhook service](#webhook-service)                                      |
+| Run RAG                                       | [RAG service](#rag-service)                                              |
 
 ## Shared by all services
 
@@ -73,7 +73,6 @@ The SFTP connector budgets `SFTP_CONNECT_TIMEOUT_SECS`, `SFTP_OPERATION_TIMEOUT_
 | `OTEL_SERVICE_NAME`           | `xberg-enterprise` | Service name on exported telemetry. The chart sets a per-component name.                                                                                                             |
 | `OTEL_METRIC_EXPORT_INTERVAL` | 15000              | OTLP metrics push interval in milliseconds, 1000 to 3600000. `/metrics` scrapes are unaffected.                                                                                      |
 | `CIRCUIT_BREAKER_OPEN_SECS`   | 30                 | How long a provider circuit (database pool, embedding and LLM providers) sheds calls after 5 consecutive failures, 1 to 600. The RAG ingest redelivery delay is this value plus 5 s. |
-| `XBERG_ENV`                   | `development`      | Deployment label on analytics events: `development`, `staging` or `production`. An unknown label stops the service.                                                                  |
 
 ### Settings the chart exposes as values
 
@@ -119,7 +118,7 @@ Replicated deployments protect submissions and result reads. The chart sets thes
 
 ### Data rooms
 
-See [Data rooms](/guides/data-rooms/). Each value is a whole number above zero. A per-project override row can change them for one project.
+See [Data rooms](/guides/data-rooms/). Each value is a whole number above zero. Per-project limit overrides are available through support.
 
 | Variable                                        | Default                               | Description                                                                                                                                                            |
 | ----------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -167,31 +166,29 @@ The chart binds the listener to `127.0.0.1:<port>`, allows `127.0.0.1:<port>` an
 
 ### Auto-tune
 
-Access is controlled per project by entitlement. These variables bound resource use. See the [auto-tune guide](/guides/auto-tune/).
+These variables bound resource use. See the [auto-tune guide](/guides/auto-tune/).
 
-| Variable                           | Default | Description                                                         |
-| ---------------------------------- | ------- | ------------------------------------------------------------------- |
-| `AUTOTUNE_MAX_CONCURRENCY`         | 8       | Trials in flight per run.                                           |
-| `AUTOTUNE_MAX_TRIALS`              | 64      | Ceiling on trials per run.                                          |
-| `AUTOTUNE_MAX_DOCUMENTS`           | 50      | Ceiling on sample documents per run.                                |
-| `AUTOTUNE_MAX_ACTIVE_JOBS`         | 3       | Active runs per project.                                            |
-| `AUTOTUNE_MAX_WALL_CLOCK_SECS`     | 3600    | Time budget for one run, at most 30 days.                           |
-| `AUTOTUNE_TRIAL_TIMEOUT_SECS`      | 900     | Timeout for one trial, at most 30 days.                             |
-| `AUTOTUNE_TOLERANCE`               | 0.01    | Score distance under which two configurations tie. Between 0 and 1. |
-| `AUTOTUNE_ESTIMATED_PAGES_PER_DOC` | 5       | Page estimate used to meter a trial before its document is read.    |
+| Variable                           | Default | Description                                                                   |
+| ---------------------------------- | ------- | ----------------------------------------------------------------------------- |
+| `AUTOTUNE_MAX_CONCURRENCY`         | 8       | Trials in flight per run.                                                     |
+| `AUTOTUNE_MAX_TRIALS`              | 64      | Ceiling on trials per run.                                                    |
+| `AUTOTUNE_MAX_DOCUMENTS`           | 50      | Ceiling on sample documents per run.                                          |
+| `AUTOTUNE_MAX_ACTIVE_JOBS`         | 3       | Active runs per project.                                                      |
+| `AUTOTUNE_MAX_WALL_CLOCK_SECS`     | 3600    | Time budget for one run, at most 30 days.                                     |
+| `AUTOTUNE_TRIAL_TIMEOUT_SECS`      | 900     | Timeout for one trial, at most 30 days.                                       |
+| `AUTOTUNE_TOLERANCE`               | 0.01    | Score distance under which two configurations tie. Between 0 and 1.           |
+| `AUTOTUNE_ESTIMATED_PAGES_PER_DOC` | 5       | Page count assumed per document when checking a trial against the page quota. |
 
 ## Backend service
 
 ### Sign-in and identity
 
-| Variable                                                                                     | Default      | Description                                                                                         |
-| -------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------- |
-| `SERVER_PORT`                                                                                | 8080 / 8081  | Listen port. The chart sets 8081.                                                                   |
-| `AUTH_ENABLED`                                                                               | `false`      | Turn on OIDC sign-in for the dashboard API. Requires `OIDC_ISSUER_URL` and `OIDC_AUDIENCE`.         |
-| `DATABASE_POOL_SIZE`                                                                         | unset        | Pool size for the backend only. Unset uses `DB_POOL_SIZE`.                                          |
-| `DEPLOYMENT_TIER`                                                                            | `enterprise` | Tier name the health endpoint reports.                                                              |
-| `SAML_SP_ENTITY_ID`, `SAML_SP_ACS_URL`, `SAML_SP_PRIVATE_KEY_PEM`, `SAML_SP_CERTIFICATE_PEM` | unset        | SAML service-provider settings. Set all four or none. See [SAML single sign-on](/guides/saml-sso/). |
-| `XBERG_ALLOW_INSECURE_WEBHOOKS`                                                              | `false`      | Allow `http://` webhook URLs. For development only.                                                 |
+| Variable                                                                                     | Default     | Description                                                                                         |
+| -------------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
+| `SERVER_PORT`                                                                                | 8080 / 8081 | Listen port. The chart sets 8081.                                                                   |
+| `AUTH_ENABLED`                                                                               | `false`     | Turn on OIDC sign-in for the web console API. Requires `OIDC_ISSUER_URL` and `OIDC_AUDIENCE`.       |
+| `DATABASE_POOL_SIZE`                                                                         | unset       | Pool size for the backend only. Unset uses `DB_POOL_SIZE`.                                          |
+| `SAML_SP_ENTITY_ID`, `SAML_SP_ACS_URL`, `SAML_SP_PRIVATE_KEY_PEM`, `SAML_SP_CERTIFICATE_PEM` | unset       | SAML service-provider settings. Set all four or none. See [SAML single sign-on](/guides/saml-sso/). |
 
 The chart also sets `CORS_ALLOWED_ORIGINS`, `HTTP_REQUEST_TIMEOUT_SECS`, `HTTP_BODY_IDLE_TIMEOUT_SECS`, `RATE_LIMIT_BURST` and `RATE_LIMIT_PER_SECS` on the backend, with the same meaning and defaults as in the [API service](#listener-limits-and-edge-behavior). `LOGIN_RATE_LIMIT_BURST` (10) and `LOGIN_RATE_LIMIT_PER_SECS` (60) limit `POST /auth/login` per client address.
 

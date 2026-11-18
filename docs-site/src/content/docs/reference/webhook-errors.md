@@ -7,7 +7,7 @@ sidebar:
 
 **Available in:** Pro, Enterprise
 
-Webhook delivery attempts can fail for network or policy reasons. The API exposes no fixed set of reason codes. Each attempt is recorded with a `success` flag, an optional `status_code` and a free-text `error`. Xberg also classifies each failure as transient or permanent. Only transient failures are retried. See the [webhooks guide](/guides/webhooks/) for setup and payloads.
+Webhook delivery attempts can fail for network or policy reasons. Each attempt is recorded with a `success` flag, an optional `status_code` and an `error`. `error` carries a free-text message. Two policy failures use fixed values: `webhook_url_denied_by_policy` and `webhook_url_not_on_allowlist`. Xberg also classifies each failure as transient or permanent. Only transient failures are retried. See the [webhooks guide](/guides/webhooks/) for setup and payloads.
 
 ## How failures are classified
 
@@ -46,6 +46,6 @@ This failure is permanent. Xberg never sends the request and schedules no retrie
 
 1. Point the webhook URL at a public-facing endpoint, for example a domain with a public IP.
 2. If the receiver must stay on a private network, expose it through a public-facing reverse proxy or API gateway.
-3. Update the webhook URL in the project dashboard.
+3. Update the webhook URL in the project's web console.
 
 The next job completion attempts delivery to the updated URL.
