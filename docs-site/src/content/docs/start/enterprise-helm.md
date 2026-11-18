@@ -123,9 +123,20 @@ On self-hosted PostgreSQL, the `timescale/timescaledb-ha:pg17-all` image bundles
 
 Use a dedicated PostgreSQL server or cluster for each independently administered Xberg deployment. Separate databases or custom login names do not isolate the fixed Xberg capability roles. Do not install independent Pro and Enterprise releases on the same PostgreSQL server, because migrations and rollbacks change shared role memberships. A separate PostgreSQL instance is enough; a separate Kubernetes cluster is not required.
 
-For a fresh installation, create an empty dedicated database and run the bundled bootstrap once as its PostgreSQL administrator. It completes the schema, the broker role graph and the physical namespace transition before the restricted Helm hooks run. The bootstrap supports both products. It reads the complete asset directory `charts/_distribution/files` of the extracted chart. Keep the assets there, because copying them into the chart's runtime `files/` directory would exceed Helm's release storage limit.
+For a fresh installation, create an empty dedicated database and run the bundled bootstrap once as its PostgreSQL administrator. It completes the schema, the role graph and the vector-index setup before the restricted Helm hooks run. The bootstrap supports both products.
 
-Supply `PGHOST`, `PGPORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` and eight role password variables through your secret manager. All nine passwords must be distinct: `POSTGRES_APPLICATION_PASSWORD`, `POSTGRES_MAINTENANCE_PASSWORD`, `POSTGRES_SCHEMA_OWNER_PASSWORD`, `POSTGRES_MIGRATION_PASSWORD`, `POSTGRES_ROLE_ADMIN_PASSWORD`, `POSTGRES_INDEX_WORKER_PASSWORD`, `POSTGRES_VECTOR_BROKER_PASSWORD` and `POSTGRES_PHYSICAL_MIGRATION_PASSWORD`.
+It reads the complete asset directory `charts/_distribution/files` of the extracted chart. Keep the assets there, because copying them into the chart's runtime `files/` directory would exceed Helm's release storage limit.
+
+Supply `PGHOST`, `PGPORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` and eight role password variables through your secret manager. The administrator password and the eight role passwords must all be distinct:
+
+- `POSTGRES_APPLICATION_PASSWORD`
+- `POSTGRES_MAINTENANCE_PASSWORD`
+- `POSTGRES_SCHEMA_OWNER_PASSWORD`
+- `POSTGRES_MIGRATION_PASSWORD`
+- `POSTGRES_ROLE_ADMIN_PASSWORD`
+- `POSTGRES_INDEX_WORKER_PASSWORD`
+- `POSTGRES_VECTOR_BROKER_PASSWORD`
+- `POSTGRES_PHYSICAL_MIGRATION_PASSWORD`
 
 ```shell
 export PGPASSWORD="$POSTGRES_PASSWORD"
@@ -145,9 +156,13 @@ sh "$SCHEMA_DIRECTORY/prepare-schema-planning-database.sh"
 
 The script detects a true superuser or a restricted administrator on PostgreSQL 16 or newer, and creates eight logins: `xberg_app`, `xberg_maintenance_login`, `xberg_index_worker_login`, `xberg_vector_index_broker_login`, `xberg_physical_migration_login`, `xberg_schema_login`, `xberg_role_admin` and `xberg_schema_migrator`. An install that creates Secrets and skips this step fails in the `maintenance-role` hook.
 
-Use this procedure only on an empty database. For an existing installation, keep its data and follow [Upgrade and rollback](#upgrade-and-rollback). Do not replay `PRO_DB_INITIALIZE_SCHEMA=true`. The requirements for a restricted administrator, the vectorscale namespace migration and the broker transition credentials are the same as in the [Pro Helm guide](/start/pro-helm/#database-bootstrap). Managed-database specifics are in [Cloud SQL](/operate/cloud-sql/) and [AWS storage](/operate/aws-storage/).
+Use this procedure only on an empty database. For an existing installation, keep its data and follow [Upgrade and rollback](#upgrade-and-rollback). Do not replay `PRO_DB_INITIALIZE_SCHEMA=true`.
 
-Keep administrator, schema-owner and physical-migration credentials out of runtime workloads. The role-admin Secret holds the restricted `xberg_role_admin` login. New installs default to `migrations.planningDatabaseBootstrap=false`. An upgrade that uses `--reuse-values` and stored the former `true` default needs `--set migrations.planningDatabaseBootstrap=false` once. Explicit bootstrap needs the one-shot `migrations.planningDatabaseBootstrapDatabaseUrlSecret`. Never reuse a runtime, migration or role-admin Secret for it.
+The requirements for a restricted administrator are the same as in the [Pro Helm guide](/start/pro-helm/#database-bootstrap). Managed-database specifics are in [Cloud SQL](/operate/cloud-sql/) and [AWS storage](/operate/aws-storage/).
+
+Keep administrator, schema-owner and physical-migration credentials out of runtime workloads. The role-admin Secret holds the restricted `xberg_role_admin` login.
+
+New installs default to `migrations.planningDatabaseBootstrap=false`. An upgrade that uses `--reuse-values` and stored the former `true` default needs `--set migrations.planningDatabaseBootstrap=false` once. Explicit bootstrap needs the one-shot `migrations.planningDatabaseBootstrapDatabaseUrlSecret`. Never reuse a runtime, migration or role-admin Secret for it.
 
 **Check.** The scripts finish without an error message, and the application login connects:
 
@@ -219,9 +234,17 @@ kubectl -n xberg-enterprise create secret generic xberg-enterprise-secrets \
   --from-literal=jwt-secret="$(openssl rand -hex 32)"
 ```
 
-Percent-encode passwords in URLs and use TLS as your database provider requires. Never use administrator URLs for runtime services. Each URL must resolve to its own login. On the `secrets.create: false` path the chart cannot see the URLs, so it compares Secret names instead, which does not prove the logins are distinct. With `secrets.create: true`, the chart refuses a vector-index URL that repeats the application, schema-owner, role-admin or maintenance URL.
+Percent-encode passwords in URLs and use TLS as your database provider requires. Never use administrator URLs for runtime services. Each URL must resolve to its own login.
 
-Separate Secrets keep the application and schema-owner credential, the maintenance credential and the role-admin credential apart, so Secret-level RBAC and rotation scope independently. The role-admin credential runs only the capability-role init step. The schema-owner URL applies extensions and schema, and that schema owner rebuilds exact grants afterward. The application and maintenance URLs must resolve to distinct logins with only their matching capability membership. To rotate the maintenance credential, publish the new URL, bump `global.maintenance.credentialRevision` and roll every consumer. Revoke the old login only after all old pods are gone and it has no active sessions.
+On the `secrets.create: false` path the chart cannot see the URLs, so it compares Secret names instead, which does not prove the logins are distinct. With `secrets.create: true`, the chart refuses a vector-index URL that repeats the application, schema-owner, role-admin or maintenance URL.
+
+Separate Secrets keep the application and schema-owner credential, the maintenance credential and the role-admin credential apart, so Secret-level RBAC and rotation scope independently:
+
+- The role-admin credential runs only the capability-role init step.
+- The schema-owner URL applies extensions and schema, and rebuilds exact grants afterward.
+- The application and maintenance URLs must resolve to distinct logins with only their matching capability membership.
+
+To rotate the maintenance credential, publish the new URL, bump `global.maintenance.credentialRevision` and roll every consumer. Revoke the old login only after all old pods are gone and it has no active sessions.
 
 **Check.** The Secrets exist:
 
@@ -233,21 +256,40 @@ The list shows every Secret named in the table, plus `xberg-registry` if you use
 
 ### NATS
 
-Use distinct, nonempty UTF-8 NATS passwords without NUL. The server and provisioning Job receive the bootstrap credential, and runtime workloads receive only their own. Existing Secrets, including those managed by External Secrets Operator, must contain the bootstrap key. NATS reserves passwords that begin with `$2a$`, `$2b$`, `$2x$` or `$2y$` followed by two digits and `$` for bcrypt hashes, and the chart rejects that syntax at startup. A Secret change needs a restart of the server and clients, because their credentials are injected as environment variables.
+Use distinct, nonempty UTF-8 NATS passwords without NUL. The server and provisioning Job receive the bootstrap credential, and runtime workloads receive only their own. Existing Secrets, including those managed by External Secrets Operator, must contain the bootstrap key.
+
+NATS reserves passwords that begin with `$2a$`, `$2b$`, `$2x$` or `$2y$` followed by two digits and `$` for bcrypt hashes, and the chart rejects that syntax at startup. A Secret change needs a restart of the server and clients, because their credentials are injected as environment variables.
 
 For external NATS, set `nats.enabled=false` and `global.natsUrl` to its full client URL, for example `tls://broker.example.com:4443`. For KEDA, also set `global.natsMonitoringUrl`. Apply the permission ConfigMap rendered with your deployment values to that server, and keep the per-service identities.
 
-The API image runs `api --bootstrap-nats <manifest-path>` in a bounded provisioning Job before runtime workloads become ready. It creates the shared streams, buckets and durable consumers. Runtime services verify existing resources and cannot administer JetStream. The bundled dependency enables the optional `natsBox` diagnostic client. Give it a separate diagnostic identity, or set `nats.natsBox.enabled=false` to omit it. When you upgrade an existing installation, add the bootstrap credential to the server and Secret first, run the provisioning command against the existing resources, and resolve any incompatible resource configuration before you apply the restrictive broker permissions and new runtime images together. Keep existing messages and consumers. Do not delete streams to bypass a configuration mismatch.
+The API image runs `api --bootstrap-nats <manifest-path>` in a bounded provisioning Job before runtime workloads become ready. It creates the shared streams, buckets and durable consumers. Runtime services verify existing resources and cannot administer JetStream.
+
+The bundled dependency enables the optional `natsBox` diagnostic client. Give it a separate diagnostic identity, or set `nats.natsBox.enabled=false` to omit it.
+
+When you upgrade an existing installation:
+
+1. Add the bootstrap credential to the server and Secret.
+2. Run the provisioning command against the existing resources.
+3. Resolve any incompatible resource configuration, then apply the restrictive broker permissions and new runtime images together.
+
+Keep existing messages and consumers. Do not delete streams to bypass a configuration mismatch.
 
 ### Object storage
 
-Set `STORAGE_PROVIDER` and `STORAGE_BUCKET` under `api.env`, under `worker.env` and, when it is enabled, under `workerGpu.env`. The RAG service reads `api.env` and takes `rag.env` as an override. The api, worker and worker-gpu services default to `STORAGE_PROVIDER: gcs` with an empty bucket, and the render stops and names the component and the value it wants. `STORAGE_PROVIDER` accepts `gcs`, `s3`, `azure`, `fs` or `memory`. Use `s3` with an S3-compatible endpoint for RustFS. See [Storage](/operate/storage/) and [AWS storage](/operate/aws-storage/).
+Set `STORAGE_PROVIDER` and `STORAGE_BUCKET` under `api.env`, under `worker.env` and, when it is enabled, under `workerGpu.env`. The RAG service reads `api.env` and takes `rag.env` as an override. The api, worker and worker-gpu services default to `STORAGE_PROVIDER: gcs` with an empty bucket, and the render stops and names the component and the value it wants. `STORAGE_PROVIDER` accepts `gcs`, `s3`, `azure` or `fs`. Use `s3` with an S3-compatible endpoint for RustFS. See [Storage](/operate/storage/) and [AWS storage](/operate/aws-storage/).
 
 ### Network policies
 
-With `<component>.networkPolicy.enabled: true`, the chart's egress rules cover same-namespace dependencies, cluster DNS and public HTTPS. The `worker`, `workerGpu` and `webhooks` policies also admit public TCP 80, because crawl seeds and webhook receivers answer on plain HTTP. The `backend` policy admits it too, for test webhook deliveries and for every other public client in the backend: OIDC discovery and JWKS, the OAuth token and revocation client, the Google Drive connector and the analytics and event notifiers. `<component>.networkPolicy.publicEgressPorts` sets the ports. An unset or null key keeps TCP 443 and 80, so `helm upgrade --reuse-values` from an older chart keeps public egress. Only an empty list renders no public rule.
+With `<component>.networkPolicy.enabled: true`, the chart's egress rules cover same-namespace dependencies, cluster DNS and public HTTPS.
 
-A PostgreSQL, NATS, identity provider or object store outside the release namespace needs a supplemental NetworkPolicy of your own that names its exact destination CIDRs and ports. Without one, every service that needs the database exits with `Failed to acquire database role validation connection: Timed out in bb8`. Keep those policies in your deployment repository and verify connectivity before rollout. For SFTP source connectors, also add the destination under `backend.networkPolicy.extraEgress`, `worker.networkPolicy.extraEgress` and `workerGpu.networkPolicy.extraEgress`.
+- The `worker`, `workerGpu` and `webhooks` policies also admit public TCP 80, because crawl seeds and webhook receivers answer on plain HTTP.
+- The `backend` policy admits it too, for test webhook deliveries and for every other public client in the backend: OIDC discovery and JWKS, the OAuth token and revocation client and the Google Drive connector.
+
+`<component>.networkPolicy.publicEgressPorts` sets the ports. An unset or null key keeps TCP 443 and 80, so `helm upgrade --reuse-values` from an older chart keeps public egress. Only an empty list renders no public rule.
+
+A PostgreSQL, NATS, identity provider or object store outside the release namespace needs a supplemental NetworkPolicy of your own that names its exact destination CIDRs and ports. Without one, every service that needs the database exits with `Failed to acquire database role validation connection: Timed out in bb8`. Keep those policies in your deployment repository and verify connectivity before rollout.
+
+For SFTP source connectors, also add the destination under `backend.networkPolicy.extraEgress`, `worker.networkPolicy.extraEgress` and `workerGpu.networkPolicy.extraEgress`.
 
 ### Observability export
 
@@ -259,7 +301,7 @@ Set these values before you deploy:
 
 | Value                                                          | Purpose                                                                                            |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `global.domain`, `global.backendDomain`                        | Primary API domain and dashboard and backend domain                                                |
+| `global.domain`, `global.backendDomain`                        | Primary API domain and web console and backend domain                                              |
 | `global.environment`                                           | Environment name, `production` or `development`                                                    |
 | `api.hosts`, `backend.hosts`                                   | Optional host aliases routed by Istio; they default to the global domains                          |
 | `istio.gateway.hosts`                                          | Every hostname the Istio Gateway accepts; must include all `api.hosts` and `backend.hosts` entries |
@@ -267,11 +309,17 @@ Set these values before you deploy:
 | `api.ingress.className`, `.annotations`, `.tls`                | Ingress class, per-ingress annotations and TLS                                                     |
 | `worker.keda.maxReplicas`                                      | Maximum worker replicas (default 50)                                                               |
 | `webhooks.keda.maxReplicas`                                    | Maximum webhook replicas (default 10)                                                              |
-| `frontend.enabled`                                             | Deploy the dashboard (default `false`)                                                             |
+| `frontend.enabled`                                             | Deploy the web console (default `false`)                                                           |
 | `global.authAllowedEmailDomains`                               | Email domains that may sign in. Room invitations go only to these domains                          |
 | `api.env.OPENAPI_CONTACT_URL`, `api.env.OPENAPI_CONTACT_EMAIL` | Contact details in the generated OpenAPI document. The same keys work under `backend.env`          |
 
-When the dashboard is on, it shares a host with the control plane and the data plane. The dashboard Ingress owns `/`. `backend.ingress` owns the control-plane paths (`/auth/config`, `/auth/login`, `/auth/account`, `/auth/profile`, `/healthz`, `/readyz`, `/api-doc`), and `backend.gatewayApiPaths: true` forwards the data-plane prefixes in `backend.apiGatewayPathPrefixes` to the api Service. Serve the dashboard host over HTTPS, because the OIDC client uses `crypto.subtle`, which browsers withhold outside a secure context.
+When the web console is on, it shares a host with the control plane and the data plane:
+
+- The web console Ingress owns `/`.
+- `backend.ingress` owns the control-plane paths (`/auth/config`, `/auth/login`, `/auth/account`, `/auth/profile`, `/healthz`, `/readyz`, `/api-doc`).
+- `backend.gatewayApiPaths: true` forwards the data-plane prefixes in `backend.apiGatewayPathPrefixes` to the api Service.
+
+Serve the web console host over HTTPS, because the OIDC client uses `crypto.subtle`, which browsers withhold outside a secure context.
 
 The chart authenticates REST calls with JWTs signed by a key from a Secret with no default. Grafana is not part of the chart, and its authentication belongs to the Grafana instance you run.
 
@@ -281,7 +329,9 @@ The `api` and `backend` services send the same security headers as Pro and defau
 
 ### Worker engine threads
 
-Set `worker.env.WORKER_ENGINE_MAX_THREADS`, or `workerGpu.env.WORKER_ENGINE_MAX_THREADS` for the GPU tier, to a positive whole number to limit the threads used to extract one document. This setting is separate from `WORKER_CONCURRENCY`, which controls how many documents a worker processes at once. `0` or an invalid value prevents the worker from starting. When unset, the engine derives its budget from the worker pod's CPU limit, or the smaller of the available CPU count and eight without a limit. Peak memory grows with the thread budget on multi-page scans, so raise the pod's memory limit when you raise it.
+Set `worker.env.WORKER_ENGINE_MAX_THREADS`, or `workerGpu.env.WORKER_ENGINE_MAX_THREADS` for the GPU tier, to a positive whole number to limit the threads used to extract one document. This setting is separate from `WORKER_CONCURRENCY`, which controls how many documents a worker processes at once. `0` or an invalid value prevents the worker from starting.
+
+When unset, the engine derives its budget from the worker pod's CPU limit, or the smaller of the available CPU count and eight without a limit. Peak memory grows with the thread budget on multi-page scans, so raise the pod's memory limit when you raise it.
 
 For model caches, offline clusters and disconnected installs, see [Air-gapped installation](/operate/air-gapped/) and [RAG configuration](/operate/rag-config/).
 
@@ -343,7 +393,7 @@ The output is `STATUS: deployed`.
 
 ## Create a project and an API key
 
-Enterprise projects, members and API keys live in the backend control plane. Create the first project and its API key in the dashboard (set `frontend.enabled=true` and sign in with your identity provider), or call the control-plane API with a session token. See [Projects and API keys](/guides/projects-and-api-keys/).
+Enterprise projects, members and API keys live in the backend control plane. Create the first project and its API key in the web console (set `frontend.enabled=true` and sign in with your identity provider), or call the control-plane API with a session token. See [Projects and API keys](/guides/projects-and-api-keys/).
 
 **Check.** The key authenticates against the data plane:
 
@@ -357,33 +407,35 @@ The response is a JSON job list. Continue with the [quickstart](/start/quickstar
 
 ## Migration modes
 
-`migrations.mode` defaults to `maintenance`, which quiesces workloads and runs the role-contract and restoration hooks. `online` renders one restricted schema runner instead. It does not stop workloads, change login privileges or disable vector-index claims, and it cannot bootstrap databases, transfer ownership, repair data or cross a rollback boundary. Online mode currently accepts only a converged no-op. A nonempty plan needs a release-shipped certificate, and no Helm value bypasses certification. Uncertified upgrades fail before they change the database, so use the maintenance procedure.
+`migrations.mode` defaults to `maintenance`. It quiesces workloads and runs the role-contract and restoration hooks around each schema change.
 
-When an installation already has a fleet control record, maintenance needs an explicit `migrations.maintenanceOperationId` (a UUID) and a `migrations.maintenanceExpectedEpoch` that matches the observed control epoch. The first maintenance hook fences the fleet before it quiesces anything, and successful completion clears only that operation. A failed operation keeps its fence until you recover it, and a different operation cannot take over implicitly. The SQL supplements, the schema bridge and the recovery procedure for a failed bootstrap migration are identical to the Pro chart's. See [Migration modes](/start/pro-helm/#migration-modes) and [Recover a failed bootstrap migration](/start/pro-helm/#recover-a-failed-bootstrap-migration), and use the Enterprise chart directory and release name in those commands. Migration hooks require `READ COMMITTED` and reject a different transaction default before they wait for the schema lock. The schema migration credential needs a direct PostgreSQL connection, or a pooler in session-pooling mode, because the migration lock is held on the connection that runs the SQL. Finalizing a bootstrap migration checks that the live schema matches the target. A difference leaves the bridge receipt active and the finalize step reports the mismatch.
+`online` renders one restricted schema runner instead and does not stop workloads. It accepts only a converged no-op today, and a nonempty plan fails before it changes the database. Use `maintenance` for every upgrade.
 
-## Upgrade an existing bridge's write permissions
+The operation ID and epoch rules, and the hook transaction requirement, match the Pro chart. See [Migration modes](/start/pro-helm/#migration-modes), and use the Enterprise release name in those commands.
 
-Before you deploy a chart that restricts the bridge functions, finish the previous maintenance operation and pause its reconcilers. Run these commands from the new release's SQL assets in `charts/_distribution/files`. Use the existing migration login for the control permissions and the existing provider login that can assume `xberg_role_root` for the bridge permissions. Both scripts can be rerun, check the installation identity and preserve the completed receipt:
+The schema migration credential needs a direct PostgreSQL connection, or a pooler in session-pooling mode, because the migration lock is held on the connection that runs the SQL.
+
+## If the migration hook fails
+
+A failed migration hook leaves the workloads drained and their autoscalers detached. This is intended: the chart keeps the release down for a corrected retry.
+
+Symptoms:
+
+- `helm upgrade --install` ends with a failed hook Job (`Job Failed`).
+- Services stay at zero replicas after the command returns.
+- A retry after you changed the chart or values is refused by the maintenance hook.
+
+Collect this before you contact support:
 
 ```shell
-psql "$SCHEMA_MIGRATION_DATABASE_URL" -X --set=bridge_installation="$INSTALLATION_ID" \
-  --file=deployment-schema-bridge-control-upgrade.sql
-psql "$BRIDGE_PROVIDER_DATABASE_URL" -X --set=bridge_installation="$INSTALLATION_ID" \
-  --file=deployment-schema-bridge-upgrade.sql
+helm history xberg-enterprise -n xberg-enterprise
+helm get hooks xberg-enterprise -n xberg-enterprise > hooks.yaml
+kubectl -n xberg-enterprise get jobs,pods
+kubectl -n xberg-enterprise logs job/REPLACE_WITH_FAILED_JOB_NAME > hook.log
+kubectl -n xberg-enterprise get events --sort-by=.lastTimestamp > events.log
 ```
 
-For a completed bridge that was never bound to an installation, run only the second command with `bridge_installation=unbound`. A fresh database receives these permissions from its normal provider bootstrap. `finalize` needs the migration credential as well as the maintenance connection.
-
-To roll the maintenance chart back across this change, finish the current operation, pause its reconcilers and restore the earlier grants before you install the older hooks. Run the bridge command first, then the control command:
-
-```shell
-psql "$BRIDGE_PROVIDER_DATABASE_URL" -X --set=bridge_installation="$INSTALLATION_ID" \
-  --set=bridge_restore_legacy=true --file=deployment-schema-bridge-upgrade.sql
-psql "$SCHEMA_MIGRATION_DATABASE_URL" -X --set=bridge_installation="$INSTALLATION_ID" \
-  --set=bridge_restore_legacy=true --file=deployment-schema-bridge-control-upgrade.sql
-```
-
-For a never-bound bridge, run only the bridge command with `bridge_installation=unbound`. Install the older chart before you resume its reconcilers, and repeat the forward upgrade before you reinstall the restricted hooks. A rollback of only a workload keeps the restricted maintenance hooks.
+Also note the installed and target chart versions, and your values file with secrets removed. Then pause every reconciler of the release, leave the chart, values and database unchanged, and contact [support](/more/support/). Bridge write-permission changes between chart versions are covered in the version notes of [Upgrades and migrations](/operate/upgrades/).
 
 ## Private MCP listener
 
@@ -391,11 +443,22 @@ The chart can run a private MCP listener on loopback for local clients. It is of
 
 ## Upgrade and rollback
 
-Rollback needs stable external credential Secrets in both the current and the target revision. Use `secrets.create=false` and stable application, maintenance, migration, role-admin and vector-worker Secret references, and keep their values available throughout the operation. Embedded chart credentials block rollback. A values-only rollback validates the existing broker contract and the desired schema before it runs the normal planner. It does not reverse broker ownership or widen migration privileges.
+Rollback needs stable external credential Secrets in both the current and the target revision. Use `secrets.create=false` and stable application, maintenance, migration, role-admin and vector-worker Secret references, and keep their values available throughout the operation. Embedded chart credentials block rollback.
 
-Back up the database and object store. See [Backup and restore](/operate/backup-and-restore/). Review the target release's image versions and migration notes, render the target chart with your values, then run `helm upgrade` with the same wait options and repeat the adapter-specific checks above. Confirm that hooks and workloads succeed, run `helm test`, and verify an authenticated extraction with a non-sensitive document. See [Upgrades](/operate/upgrades/) for the version policy.
+A values-only rollback validates the existing broker contract and the desired schema before it runs the normal planner. It does not reverse broker ownership or widen migration privileges.
 
-Helm rollback cannot undo database data changes. Before you cross a schema-ownership boundary, stop and contact [support](/more/support/) for a version-specific privileged rollback plan. This guide does not document the required administrator grants or authorize a one-step rollback across that boundary. Keep old image and chart versions and database backups until you accept the upgrade. For a support-coordinated ownership rollback, make sure any NetworkPolicy of your own that selects migration hooks permits your cluster's exact Kubernetes API destination CIDRs and TCP ports, including the destinations and ports enforced after Service address translation. Apply and verify that access first, do not open all private ranges, and remove temporary allowances after acceptance.
+To upgrade:
+
+1. Back up the database and object store. See [Backup and restore](/operate/backup-and-restore/).
+2. Review the target release's image versions and migration notes, and render the target chart with your values.
+3. Run `helm upgrade` with the same wait options and repeat the adapter-specific checks above.
+4. Confirm that hooks and workloads succeed, run `helm test`, and verify an authenticated extraction with a non-sensitive document.
+
+See [Upgrades and migrations](/operate/upgrades/) for the version policy.
+
+Helm rollback cannot undo database data changes. Before you cross a schema-ownership boundary, stop and contact [support](/more/support/) for a version-specific privileged rollback plan. This guide does not authorize a one-step rollback across that boundary. Keep old image and chart versions and database backups until you accept the upgrade.
+
+A support-coordinated ownership rollback needs one more precondition. Any NetworkPolicy of your own that selects migration hooks must permit your cluster's exact Kubernetes API destination CIDRs and TCP ports, as enforced after Service address translation. Apply and verify that access first, do not open all private ranges, and remove temporary allowances after acceptance.
 
 ## Next steps
 

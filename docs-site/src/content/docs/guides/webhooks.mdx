@@ -16,7 +16,7 @@ Both products deliver the same body, the same headers and the same retry schedul
 | Mode            | Available in    | Registered with                                                  |
 | --------------- | --------------- | ---------------------------------------------------------------- |
 | Inline webhook  | Pro, Enterprise | A `webhook` object on each request                               |
-| Managed webhook | Enterprise      | A project-level subscription, once, through the API or dashboard |
+| Managed webhook | Enterprise      | A project-level subscription, once, through the API or web console |
 
 On Pro, delivery runs inside the service and never blocks extraction. `PRO_WEBHOOK_MAX_RETRIES` sets the attempt count. The default is 5, and a value outside 1 to 10 stops the service at start-up. On Enterprise, deliveries are queued and survive restarts, which gives at-least-once delivery. Every retry adds jitter, so jobs that fail together do not retry together.
 
@@ -102,7 +102,7 @@ Deliveries carry these headers:
 | Header | Value |
 |--------|-------|
 | `Content-Type` | `application/json` |
-| `User-Agent` | `xberg-webhook/0.1.0`, a fixed literal that does not track the release version |
+| `User-Agent` | `xberg-webhook/0.1.0` |
 | `X-Webhook-Signature` | `t=<unix seconds>,v1=<hex>`, present when a secret is configured |
 | `traceparent` | W3C trace context, for correlating the delivery with server-side spans |
 

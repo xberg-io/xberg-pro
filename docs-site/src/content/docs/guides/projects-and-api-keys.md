@@ -17,7 +17,7 @@ Jobs, documents, collections, presets, webhooks, integrations and audit entries 
 | ---------------------------------- | -------------------------------------------------------------------------------- |
 | Project API key (`kz_...`)         | Data-plane calls from your services: extract, jobs, RAG, presets                 |
 | Admin key (`XBERG_ADMIN_KEY`, Pro) | Instance control plane: create projects and keys, read the license and audit log |
-| Session token                      | A signed-in person in the dashboard, through OIDC on Pro or SSO on Enterprise    |
+| Session token                      | A signed-in person in the web console, through OIDC on Pro or SSO on Enterprise  |
 
 Send keys as `Authorization: Bearer <key>`. Keys carry the prefix `kz_` and are shown in full only once, when you create them. See [Authentication](/concepts/authentication/).
 

@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-Xberg Pro runs as one container that serves the REST API on port 8080, the bundled dashboard on port 3000 and Prometheus metrics on port 9090. PostgreSQL is the only other service. Documents and results go to local disk by default, or to S3, GCS or Azure Blob Storage.
+Xberg Pro runs as one container that serves the REST API on port 8080, the bundled web console on port 3000 and Prometheus metrics on port 9090. PostgreSQL is the only other service. Documents and results go to local disk by default, or to S3, GCS or Azure Blob Storage.
 
 Use this page for a single host: an evaluation, a proof of concept or a small production deployment. For Kubernetes, use [Install Xberg Pro with Helm](/start/pro-helm/).
 
@@ -57,7 +57,10 @@ cp "$PRO_CHART_DIR"/charts/_distribution/files/pro-db-bootstrap.sh scripts/
 cp "$PRO_CHART_DIR"/charts/_distribution/files/*.sql sql/
 ```
 
-The chart archive does not carry the small script that enables vector-index claims after the first start, because the Helm chart does that in a hook. Create it for Compose:
+The chart archive does not carry the small script that turns on vector-index processing after the first start, because the Helm chart does that in a hook. Create it for Compose. Expand the block, copy it as is and do not edit it:
+
+<details>
+<summary>Create <code>scripts/pro-db-claims-enable.sh</code></summary>
 
 ```shell
 cat > scripts/pro-db-claims-enable.sh <<'SCRIPT'
@@ -92,7 +95,9 @@ SCRIPT
 chmod +x scripts/*.sh
 ```
 
-The script fails with a named error when the activation role or the setter function is missing, which means the bootstrap and the image come from different releases.
+</details>
+
+The script fails with a named error when its prerequisites are missing, which means the bootstrap and the image come from different releases.
 
 Always take the bootstrap files from the chart release that matches the image you run. Mixing versions fails the schema checks at startup.
 
@@ -108,7 +113,7 @@ docker pull "$PRO_IMAGE"
 
 ## 2. Generate credentials
 
-Pro uses nine distinct PostgreSQL logins, one per role, so a leaked application credential cannot alter the schema. Generate all passwords once, the control-plane key and the optional integration keys into a protected env file. Export `XBERG_LICENSE_KEY` (the token, without a trailing newline) first, then run the command in a subshell so that its options do not stay in your terminal:
+Pro uses nine passwords: the administrator and eight runtime logins. Each login has narrow rights, so a leaked application credential cannot alter the schema. Generate all passwords once, the control-plane key and the optional integration keys into a protected env file. Export `XBERG_LICENSE_KEY` (the token, without a trailing newline) first, then run the command in a subshell so that its options do not stay in your terminal:
 
 ```shell
 export XBERG_LICENSE_KEY=REPLACE_WITH_LICENSE_TOKEN
@@ -134,7 +139,7 @@ The `set -C` option makes the command fail instead of overwriting an existing `.
 
 Keep this file and do not commit it. The nine passwords must stay the same across restarts, because the bootstrap service rotates the database roles to match them. `XBERG_ADMIN_KEY` cannot be recovered from the data volume.
 
-`INTEGRATION_KEK` and `INTEGRATION_STATE_SECRET` enable the integration hub for [source connectors](/guides/source-connectors/). Set both or neither. Pro refuses to start with only one.
+`INTEGRATION_KEK` and `INTEGRATION_STATE_SECRET` enable the integration hub for every [source connector](/guides/source-connectors/), not only OAuth ones. Without them the hub answers `503`. Set both or neither. Pro refuses to start with only one.
 
 **Check.** The file holds nine passwords and the other values:
 
@@ -309,6 +314,8 @@ volumes:
   postgres-socket:
 ```
 
+The health check probes `/readyz` on three ports: 8080 for the API, 9091 for the embedded extraction worker and 9092 for the vector-index broker. Ports 9091 and 9092 stay inside the container.
+
 Ports bind to the loopback address on purpose. A published Docker port bypasses the host firewall, so put a TLS reverse proxy in front of 8080 and 3000 before you expose Pro. The default `fs` storage provider writes to the `xberg-data` volume. To use object storage instead, see [Configuration](#configuration).
 
 **Check.** Compose accepts the file and resolves every variable:
@@ -395,11 +402,11 @@ curl --fail -H "Authorization: Bearer $XBERG_API_KEY" "$XBERG_URL/v1/usage"
 
 The response is a JSON usage report with `total_documents` set to `0`. Continue with the [quickstart](/start/quickstart/).
 
-## Sign in to the dashboard
+## Sign in to the web console
 
-The dashboard listens on `http://localhost:3000`. Human sign-in needs an OpenID Connect (OIDC) identity provider. An API key cannot create a browser session. Choose one of three paths:
+The web console listens on `http://localhost:3000`. Human sign-in needs an OpenID Connect (OIDC) identity provider. An API key cannot create a browser session. Choose one of three paths:
 
-- **API only.** Skip the dashboard and call the REST API with `XBERG_ADMIN_KEY` or a project key. No identity provider is needed.
+- **API only.** Skip the web console and call the REST API with `XBERG_ADMIN_KEY` or a project key. No identity provider is needed.
 - **OIDC sign-in.** Register a public OIDC client with PKCE, then set `OIDC_ISSUER_URL`, `OIDC_AUDIENCE`, `JWT_SECRET`, the three `NEXT_PUBLIC_OIDC_*` values and an allowlist (`PRO_ALLOWED_EMAILS` or `PRO_ALLOWED_EMAIL_DOMAINS`). Set `PRO_ADMIN_EMAILS` to the people who manage the instance. No first user becomes admin automatically. [Pro configuration](/reference/pro-configuration/#dashboard-sign-in-with-oidc) lists every variable and gives a Compose override.
 - **No authentication, evaluation only.** Add `PRO_AUTH_MODE=disabled` to `.env.pro` and recreate the stack. The UI and API then use a single persisted local workspace without login or API key. Anyone who can reach the service can use it, so restrict network access.
 

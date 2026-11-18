@@ -11,7 +11,7 @@ Teams and roles control who can do what in an Enterprise project.
 
 Each member holds a base role, Owner or Member, and can also hold custom roles that grant specific permissions. Custom roles are also what [SCIM group mappings](/guides/scim/) and role-bound API keys point at.
 
-These routes belong to the backend control plane. Call them with a session token for a signed-in project member, or use the dashboard Team page. Enable the dashboard with `frontend.enabled=true` in the chart values.
+These routes belong to the backend control plane. Call them with a session token for a signed-in project member, or use the Team page of the web console. Enable the web console with `frontend.enabled=true` in the chart values.
 
 ## Base roles
 
@@ -71,7 +71,7 @@ Read, update and delete roles at `/v1/projects/{id}/roles` and `/v1/projects/{id
 | Usage               | `usage.read`, `analytics.read`, `sandbox.execute`                                                                                                                                                                      |
 | Data rooms          | `data_room.read`, `data_room.create`, `data_room.update`, `data_room.delete`, `data_room.manage`, `data_room.item.write`, `data_room.member.manage`, `data_room.transfer`, `data_room.publish`, `data_room.audit.read` |
 
-A member's effective permissions are the union of all their roles. The full list is in the backend OpenAPI specification under `ProjectPermission`; see the [API reference](/reference/api/).
+A member's effective permissions are the union of all their roles. The full list of project permissions is in the backend OpenAPI specification; see the [API reference](/reference/api/).
 
 ## Role-bound API keys
 

@@ -29,11 +29,11 @@ curl "$XBERG_URL/v1/audit?action=job.submit&limit=50&offset=0" \
 
 A caller that is neither an admin nor the project owner gets `403`. An unknown `action` or an out-of-range page value gets `400`.
 
-On Enterprise, the dashboard backend serves the same data to project members at `GET /v1/projects/{id}/audit`.
+On Enterprise, the web console backend serves the same data to project members at `GET /v1/projects/{id}/audit`.
 
 ## Integrity
 
-Audit entries form a hash chain, so a missing or altered row is detectable, and the Pro image ships a verifier. See [Audit chain](/operate/audit-chain/) for how to run it. Retrieval audit rows for RAG (`rag_audit_events`) are kept for `RAG_AUDIT_RETENTION_DAYS` (default 90, range 1-36,500); the maintenance loop drops a monthly partition once the whole month is past that age.
+Audit entries form a hash chain, so a missing or altered row is detectable, and the Pro image ships a verifier. See [Audit chain](/operate/audit-chain/) for how to run it. Retrieval audit records are kept for `ragAudit.retentionDays` on Enterprise or `RAG_AUDIT_RETENTION_DAYS` on Pro (default 90); query text is stored only when the collection sets `audit_query_content`.
 
 ## Related
 

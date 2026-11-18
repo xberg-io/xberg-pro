@@ -11,12 +11,12 @@ The private MCP listener gives a Model Context Protocol client access to a proje
 
 ## Modes
 
-One listener serves one mode. Pick the mode with `mcp.mode` in the chart values.
+One listener serves one mode. Pick the mode with `mcp.mode` in the chart values. On Pro, `mcp.mode` requires chart 0.7.5 or later, and chart 0.7.4 serves `rag` mode only.
 
-| Mode            | Tools                                                                        | Deployment it needs                                                                                                                                                 |
-| --------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rag` (default) | `list_collections`, `list_documents`, `retrieve`                             | The standard data policy and RAG enabled. Pro runs as a singleton with its in-process RAG. Enterprise runs the API and the RAG worker.                              |
-| `extraction`    | `extract_document`, `get_extraction_job_status`, `get_extraction_job_result` | A replicated, extraction-only deployment. Pro needs S3 or Azure Blob storage with versioning. Enterprise needs its protected extraction runtime and result storage. |
+| Mode            | Tools                                                                        | Deployment it needs                                                                                                                                                                               |
+| --------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rag` (default) | `list_collections`, `list_documents`, `retrieve`                             | The standard data policy and RAG enabled. Pro runs as a singleton with its in-process RAG. Enterprise runs the API and the RAG worker.                                                            |
+| `extraction`    | `extract_document`, `get_extraction_job_status`, `get_extraction_job_result` | A replicated, extraction-only deployment. Pro needs S3 or Azure Blob storage with versioning, and Pro chart 0.7.5 or later. Enterprise needs its protected extraction runtime and result storage. |
 
 The two modes need different deployment shapes. The chart refuses `rag` mode on a replicated deployment and `extraction` mode on a singleton, and names the missing condition. Protected RAG collections require a separate authorization path and are not served by this listener.
 
@@ -45,7 +45,7 @@ migrations:
   mcpRagReleaseExecute: true
 ```
 
-Pro must run as a singleton with `dataPolicy: standard` and `PRO_RAG_ENABLED` left at its default of `true`. See [RAG](/guides/rag/).
+On chart 0.7.4, omit `mode`. Pro must run as a singleton with `dataPolicy: standard` and `PRO_RAG_ENABLED` left at its default of `true`. See [RAG](/guides/rag/).
 
 ### RAG mode on Enterprise
 
@@ -74,7 +74,7 @@ The API and RAG worker must be enabled, and `dataPolicy` must be `standard`.
 
 ### Extraction mode
 
-Extraction mode applies to a registered replicated generation with `dataPolicy: extraction_only`. Set `mcp.mode: extraction` and `mcp.enabled: true` with the same port and Secret reference, and keep RAG and its RPC disabled. Record the settings in the new generation's configuration before you register it. See the [deployment operator](/operate/deployment-operator/).
+Extraction mode applies to a registered replicated generation with `dataPolicy: extraction_only`. On Pro it requires Pro chart 0.7.5 or later, because chart 0.7.4 has no `mcp.mode` value. Set `mcp.mode: extraction` and `mcp.enabled: true` with the same port and Secret reference, and keep RAG and its RPC disabled. Record the settings in the new generation's configuration before you register it. See the [deployment operator](/operate/deployment-operator/).
 
 On Pro, also set:
 

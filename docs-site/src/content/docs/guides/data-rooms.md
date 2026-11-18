@@ -141,19 +141,19 @@ Revoking a link, removing a member or disabling link access ends the access it g
 
 Set data room limits under `api.env` in the chart values. Each value is a whole number above zero, and the service refuses to start with any other value.
 
-| Variable                                        | Default | Limit                                                                                                                                                  |
-| ----------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATA_ROOMS_ENABLED`                            | true    | Whether the plan offers data rooms. With `false`, every room route answers `404 data_room.disabled` and `/healthz` reports `data_rooms.enabled: false` |
-| `DATA_ROOM_MAX_ROOMS`                           | 100     | Live rooms in one project. A create past the limit answers `409 quota_exceeded`                                                                        |
-| `DATA_ROOM_MAX_ITEMS_PER_ROOM`                  | 500     | Items in one room                                                                                                                                      |
-| `DATA_ROOM_MAX_MEMBERS_PER_ROOM`                | 100     | People in one room                                                                                                                                     |
-| `DATA_ROOM_MAX_PENDING_INVITATIONS`             | 50      | Pending invitations in one room                                                                                                                        |
-| `DATA_ROOM_INVITATION_TTL_HOURS`                | 72      | Hours an invitation stays valid                                                                                                                        |
-| `DATA_ROOM_PUBLIC_VIEW_REQUESTS_PER_MINUTE`     | 60      | Requests per client address to the public view. A request past the limit answers `429 rate_limited`                                                    |
-| `DATA_ROOM_PUBLIC_DOWNLOAD_REQUESTS_PER_MINUTE` | 10      | Requests per client address to a public download                                                                                                       |
-| `DATA_ROOM_INVITATION_REQUESTS_PER_MINUTE`      | 30      | Requests per signed-in caller to the invitation routes of one project                                                                                  |
+| Variable                                        | Default | Limit                                                                                                                                   |
+| ----------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATA_ROOMS_ENABLED`                            | true    | Turns data rooms on. With `false`, every room route answers `404 data_room.disabled` and `/healthz` reports `data_rooms.enabled: false` |
+| `DATA_ROOM_MAX_ROOMS`                           | 100     | Live rooms in one project. A create past the limit answers `409 quota_exceeded`                                                         |
+| `DATA_ROOM_MAX_ITEMS_PER_ROOM`                  | 500     | Items in one room                                                                                                                       |
+| `DATA_ROOM_MAX_MEMBERS_PER_ROOM`                | 100     | People in one room                                                                                                                      |
+| `DATA_ROOM_MAX_PENDING_INVITATIONS`             | 50      | Pending invitations in one room                                                                                                         |
+| `DATA_ROOM_INVITATION_TTL_HOURS`                | 72      | Hours an invitation stays valid                                                                                                         |
+| `DATA_ROOM_PUBLIC_VIEW_REQUESTS_PER_MINUTE`     | 60      | Requests per client address to the public view. A request past the limit answers `429 rate_limited`                                     |
+| `DATA_ROOM_PUBLIC_DOWNLOAD_REQUESTS_PER_MINUTE` | 10      | Requests per client address to a public download                                                                                        |
+| `DATA_ROOM_INVITATION_REQUESTS_PER_MINUTE`      | 30      | Requests per signed-in caller to the invitation routes of one project                                                                   |
 
-Set `API_TRUSTED_PROXY_CIDRS` and `API_TRUSTED_PROXY_HOPS` under `api.env` when a reverse proxy sits in front of the API. The two public limits then key on the client address in `X-Forwarded-For`; without them, every visitor behind the proxy shares one limit. A row in `data_room_limit_overrides` gives one project its own limits. Its `invitation_requests_per_minute` column replaces the invitation limit for that project, and its `anonymous_requests_per_minute` column adds a second per-address limit on the public view and download. The global public limits stay in force, so that column can lower a project's limit and cannot raise it. A refused request carries `Retry-After`.
+Set `API_TRUSTED_PROXY_CIDRS` and `API_TRUSTED_PROXY_HOPS` under `api.env` when a reverse proxy sits in front of the API. The two public limits then key on the client address in `X-Forwarded-For`; without them, every visitor behind the proxy shares one limit. Per-project limit overrides are available through [support](/more/support/). A refused request carries `Retry-After`.
 
 ## SDKs
 
