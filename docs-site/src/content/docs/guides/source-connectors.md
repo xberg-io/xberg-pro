@@ -26,6 +26,8 @@ You create an integration, connect it, and either pull documents on demand or le
 | `notion`     | Notion               | `api_key` (internal integration token) |
 | `confluence` | Confluence           | `static`                               |
 
+Scheduled synchronization covers the object stores, Dropbox, OneDrive, SharePoint and SFTP. Google Drive, Notion and Confluence serve on-demand listing and ingestion by reference only. Other providers are not available.
+
 ## Enable the integration hub
 
 The hub encrypts credentials with a key you control. On Pro, set both of these on the container, each to the base64 encoding of 32 random bytes:
@@ -137,7 +139,37 @@ Tune the scheduler with `PRO_INTEGRATION_SYNC_INTERVAL_SECS` (default 300), `_PO
 
 Revisions are identified by the provider: the Graph `cTag` (with `eTag` as fallback) for Microsoft sources, the `rev` for Dropbox, and path, size and time for SFTP. A moved file keeps its identity where the provider offers a stable ID. A deletion is reconciled only after a complete scan finishes. Sync resumes from its encrypted cursor after a restart, and an expired provider cursor starts a replacement full scan.
 
-To send synchronized documents straight into a RAG collection, set the target with `PUT /v1/projects/{project_id}/integrations/{iid}/sync/rag-target`; see [RAG](/guides/rag/).
+To send synchronized documents straight into a RAG collection, set the target with `PUT /v1/projects/{project_id}/integrations/{iid}/sync/rag-target`; see [Index S3 documents into RAG](#index-s3-documents-into-rag).
+
+## Index S3 documents into RAG
+
+On standalone Pro, an S3 integration can feed a RAG collection directly.
+
+1. Enable RAG, enable scheduled synchronization and keep `PRO_INTEGRATION_SYNC_CURSOR_KEY` stable across restarts.
+2. Enable RAG on the project and create a collection with managed local embeddings. See [RAG](/guides/rag/).
+3. As the project owner or a system administrator (the instance admin key works), bind the collection:
+
+   ```bash
+   curl -X PUT "$XBERG_URL/v1/projects/$PROJECT_ID/integrations/$INTEGRATION_ID/sync/rag-target" \
+     -H "Authorization: Bearer $XBERG_ADMIN_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"collection_id": "REPLACE_WITH_COLLECTION_UUID"}'
+   ```
+
+4. Opt the integration in with `PUT .../sync` as shown above.
+
+The bind request is safe to retry. Each integration has one target collection, so create a new integration to use another. Binding makes every document that the integration's S3 credential can read searchable by users who can query the collection, so use a bucket or root prefix whose documents suit that audience.
+
+A document is indexed after its discovery page commits. When a source object changes, the new extraction replaces the indexed document once it succeeds. A complete inventory removes documents whose objects disappeared, and deleting the integration removes the vectors it owns.
+
+Connector extraction results on standalone Pro are unmanaged by default, so authorized users can still read the historical job results after the source object or the integration is gone. To limit that, set `PRO_CONNECTOR_RESULT_REMOVAL_GRACE_SECS` (0 to 315,360,000) on a standalone, standard-policy Pro. It applies to S3 connector results admitted after you set it:
+
+- Public access to a result ends when the grace period after the removal expires. `0` hides the result as soon as the removal commits.
+- The policy covers the result JSON, the page inventory and the page images. The bytes stay available for internal RAG indexing.
+- If the same provider version reappears, access to that exact extraction returns, and the next removal starts a new grace period. Other historical versions keep their own periods.
+- Unsetting the variable affects only future admissions. A binary from before this feature can reopen public access after a rollback, and a supporting binary enforces the stored policy again.
+
+Upgrade the schema and the matching database grant tooling before you run the new binary. An older binary can keep processing jobs after the schema upgrade, but keep using the new grant tooling if you roll the binary back.
 
 ## Limits and errors
 

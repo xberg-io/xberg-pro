@@ -30,8 +30,10 @@ The chart and the Pro image are public, so you need no access to any private rep
 
 Use an empty working directory. The public chart needs no registry login. Public availability does not grant an open-source license: the archive's `LICENSE` and your commercial agreement apply.
 
+Set `VERSION` to the chart release you were given, or to the latest published release. The example uses `0.7.4`:
+
 ```shell
-export VERSION=0.5.5
+export VERSION=0.7.4
 export PRO_CHART="oci://us-central1-docker.pkg.dev/xberg-public-assets/helm-charts/pro"
 helm pull "$PRO_CHART" --version "$VERSION" --untar
 export PRO_CHART_DIR="$PWD/pro"
@@ -413,6 +415,44 @@ kubectl -n xberg-pro get events --sort-by=.lastTimestamp | grep -i -E 'pull|dead
 
 An image pull failure is the first cause to check. The pod shows `ImagePullBackOff` with the image name, and the events carry the registry response, for example `401 Unauthorized`. Confirm the image reference and anonymous pull access for the public defaults. For a private mirror, configure its credentials in `imagePullSecrets` and run the install again. The first hook, the topology guard, pulls the same Pro image as the StatefulSet, so a pull failure stops it within two minutes and leaves the failed pod for inspection. For another hook, replace the `job-name` label value with the Job name from the Helm message.
 
+## Run Pro with multiple replicas
+
+Use `deployment.mode=replicated` for extraction-only Pro with 2 to 32 replicas per generation, on distinct nodes. A replicated generation needs:
+
+- An external PostgreSQL service and a shared AWS S3, Google Cloud Storage or Azure Blob namespace.
+- Required API authentication, `dataPolicy=extraction_only`, and Pro RAG and Auto-Tune disabled.
+- `persistence.enabled=false` and `migrations.enabled=false` on the generation releases. Plan database maintenance separately, at installation scope.
+- A customer-managed layer-7 upstream whose connection draining you verified, before you set `deployment.traffic.connectionDrainingConfirmed=true`.
+
+On native Kubernetes, set `deployment.adapter=native` and install each immutable generation as its own Helm release, with the registered installation and generation IDs, the storage namespace identity and the configuration and policy digests. Pin the platform image manifest and match its architecture in `nodeSelector`. With a separately installed Argo Rollouts controller, set `deployment.adapter=argo-rollouts` and `deployment.argo.publishOnly=true` to publish the desired generation, and the installation operator creates the Rollout and manages the public Service.
+
+Register the installation, qualify cross-Pod storage, admit the generation and verify serving readiness with the [deployment operator](/operate/deployment-operator/) before you route traffic. An existing filesystem-backed singleton stays a singleton on upgrade. Plan a separate move to shared storage and a verified Service handoff before you route traffic to a replicated generation. Replicated qualification excludes PVC-backed models and arbitrary sidecar or service-account token injection. EKS Pod Identity and IRSA credentials work through the AWS storage profile.
+
+## Clean up abandoned S3 inputs
+
+On a replicated generation that uses the installation's registered, versioned AWS S3 namespace, Pro can delete extraction inputs that were uploaded but never attached to a job. The cleanup is off. To enable it:
+
+1. Upgrade the schema and every application and maintenance binary that can start against the installation, rollback candidates included. Older binaries reject the expanded maintenance privileges.
+2. With the cleanup still disabled, set `migrations.inputS3CleanupGrants: grant` for one maintenance release. For a database you manage yourself, run the maintenance grant phase with `PRO_INPUT_S3_CLEANUP_GRANTS=grant`. Then return the chart value to `verify`.
+3. Give the runtime identity `s3:DeleteObjectVersion` on the installation's `documents/` prefix under the storage root.
+4. Set `configMap.PRO_INPUT_S3_CLEANUP_ENABLED: "true"` on the admitted generation. Pro refuses to start with the cleanup enabled when the maintenance login lacks the grants.
+
+Before you roll back to an older binary, disable the cleanup, let it drain, run the maintenance grant phase with `migrations.inputS3CleanupGrants: revoke` (or `PRO_INPUT_S3_CLEANUP_GRANTS=revoke`) and confirm that the grants are gone.
+
+A failed or interrupted delete keeps the staging credit held for a later retry. Track progress on the metrics endpoint. Each replica reports its own events:
+
+| Metric                                                                  | Meaning                                                                                            |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `pro_abandoned_s3_input_cleanup_candidate_events_total`                 | Candidate events by outcome: `started`, `acknowledged`, `not_authorized`, `unconfirmed`, `failed`. |
+| `pro_abandoned_s3_input_cleanup_sweep_events_total`                     | Discovery sweeps: `completed`, `not_authorized`, `failed`.                                         |
+| `pro_abandoned_s3_input_cleanup_last_completed_sweep_timestamp_seconds` | When an authorized replica last finished a scan. Absent until the first sweep completes.           |
+
+A completed sweep does not mean every delete finished, so read the sweep timestamp next to the candidate outcomes. A preview or fenced replica can report `not_authorized` while another replica keeps processing. For the database-side census and reconciliation procedures, contact [support](/more/support/).
+
+## Private MCP listener
+
+The chart can start a private MCP listener on loopback for local clients. It is off by default. See [Private MCP listener](/guides/mcp/).
+
 ## Migration modes
 
 `migrations.mode` defaults to `maintenance`, which quiesces the workload and runs the role-contract and restoration hooks around each schema change. `online` renders one restricted schema runner instead. It does not stop workloads, change login privileges or disable vector-index claims, and it cannot bootstrap databases, transfer ownership, repair data or cross a rollback boundary. Online mode currently accepts only a converged no-op. A nonempty plan needs a release-shipped certificate, and no Helm value bypasses certification, so an uncertified upgrade fails before it changes the database. Use the maintenance procedure for those upgrades. Online planner URLs must be plain `postgres://user:password@host:port/database` URIs with an optional `sslmode` parameter.
@@ -433,7 +473,9 @@ Some installs need a one-time SQL supplement from `$PRO_CHART_DIR/charts/_distri
 
 - **Maintenance recovery role.** A restricted install bootstrapped before the recovery role existed needs `maintenance-recovery-role-bootstrap.sql`, run with `--set=role_admin_login=xberg_role_admin`. It creates `xberg_maintenance_recovery` and the two functions that grant and revoke it. Until it runs, the chart's role hook and the bootstrap script refuse and name the supplement.
 
-For a database whose roles already exist, set `migrations.schemaBridge.bootstrapEnabled` and point `migrations.schemaBridge.databaseUrlSecret.name` and `.key` at a dedicated one-shot provider credential. That login must be allowed to `SET ROLE xberg_role_root`, and the root must hold `CREATE` on the target database. The hook grants neither. Disable the option after the first successful initialization. On a self-managed database initialized by the standard bootstrap, grant only that capability to the existing restricted root before you enable the bridge. Do not create a replacement root, change its attributes or grant `CREATEROLE`:
+An existing installation from before chart 0.7 has no initialized schema bridge, so its first upgrade needs this bootstrap before the maintenance fence. Rehearse the target release's database preparation on a restored backup first, and apply any compatibility supplement from the list above before the upgrade.
+
+For a database whose roles already exist, set `migrations.schemaBridge.bootstrapEnabled` and point `migrations.schemaBridge.databaseUrlSecret.name` and `.key` at a dedicated one-shot provider credential. That login must be allowed to `SET ROLE xberg_role_root`, and the root must hold `CREATE` on the target database. The hook grants neither. The Job's `migrations.schemaBridge.activeDeadlineSeconds` defaults to 300 and accepts 120 to 3600, so allow time for scheduling and a cold image pull. On Argo CD the Job runs as a PreSync hook before the maintenance fence. Disable the option after the first successful initialization. On a self-managed database initialized by the standard bootstrap, grant only that capability to the existing restricted root before you enable the bridge. Do not create a replacement root, change its attributes or grant `CREATEROLE`:
 
 ```shell
 psql "${PROVIDER_DATABASE_URL:?set the target database provider URL}" -X --set=ON_ERROR_STOP=1 <<'SQL'

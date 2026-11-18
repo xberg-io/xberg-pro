@@ -359,7 +359,35 @@ The response is a JSON job list. Continue with the [quickstart](/start/quickstar
 
 `migrations.mode` defaults to `maintenance`, which quiesces workloads and runs the role-contract and restoration hooks. `online` renders one restricted schema runner instead. It does not stop workloads, change login privileges or disable vector-index claims, and it cannot bootstrap databases, transfer ownership, repair data or cross a rollback boundary. Online mode currently accepts only a converged no-op. A nonempty plan needs a release-shipped certificate, and no Helm value bypasses certification. Uncertified upgrades fail before they change the database, so use the maintenance procedure.
 
-When an installation already has a fleet control record, maintenance needs an explicit `migrations.maintenanceOperationId` (a UUID) and a `migrations.maintenanceExpectedEpoch` that matches the observed control epoch. The first maintenance hook fences the fleet before it quiesces anything, and successful completion clears only that operation. A failed operation keeps its fence until you recover it, and a different operation cannot take over implicitly. The SQL supplements, the schema bridge and the recovery procedure for a failed bootstrap migration are identical to the Pro chart's. See [Migration modes](/start/pro-helm/#migration-modes) and [Recover a failed bootstrap migration](/start/pro-helm/#recover-a-failed-bootstrap-migration), and use the Enterprise chart directory and release name in those commands. Migration hooks require `READ COMMITTED` and reject a different transaction default before they wait for the schema lock.
+When an installation already has a fleet control record, maintenance needs an explicit `migrations.maintenanceOperationId` (a UUID) and a `migrations.maintenanceExpectedEpoch` that matches the observed control epoch. The first maintenance hook fences the fleet before it quiesces anything, and successful completion clears only that operation. A failed operation keeps its fence until you recover it, and a different operation cannot take over implicitly. The SQL supplements, the schema bridge and the recovery procedure for a failed bootstrap migration are identical to the Pro chart's. See [Migration modes](/start/pro-helm/#migration-modes) and [Recover a failed bootstrap migration](/start/pro-helm/#recover-a-failed-bootstrap-migration), and use the Enterprise chart directory and release name in those commands. Migration hooks require `READ COMMITTED` and reject a different transaction default before they wait for the schema lock. The schema migration credential needs a direct PostgreSQL connection, or a pooler in session-pooling mode, because the migration lock is held on the connection that runs the SQL. Finalizing a bootstrap migration checks that the live schema matches the target. A difference leaves the bridge receipt active and the finalize step reports the mismatch.
+
+## Upgrade an existing bridge's write permissions
+
+Before you deploy a chart that restricts the bridge functions, finish the previous maintenance operation and pause its reconcilers. Run these commands from the new release's SQL assets in `charts/_distribution/files`. Use the existing migration login for the control permissions and the existing provider login that can assume `xberg_role_root` for the bridge permissions. Both scripts can be rerun, check the installation identity and preserve the completed receipt:
+
+```shell
+psql "$SCHEMA_MIGRATION_DATABASE_URL" -X --set=bridge_installation="$INSTALLATION_ID" \
+  --file=deployment-schema-bridge-control-upgrade.sql
+psql "$BRIDGE_PROVIDER_DATABASE_URL" -X --set=bridge_installation="$INSTALLATION_ID" \
+  --file=deployment-schema-bridge-upgrade.sql
+```
+
+For a completed bridge that was never bound to an installation, run only the second command with `bridge_installation=unbound`. A fresh database receives these permissions from its normal provider bootstrap. `finalize` needs the migration credential as well as the maintenance connection.
+
+To roll the maintenance chart back across this change, finish the current operation, pause its reconcilers and restore the earlier grants before you install the older hooks. Run the bridge command first, then the control command:
+
+```shell
+psql "$BRIDGE_PROVIDER_DATABASE_URL" -X --set=bridge_installation="$INSTALLATION_ID" \
+  --set=bridge_restore_legacy=true --file=deployment-schema-bridge-upgrade.sql
+psql "$SCHEMA_MIGRATION_DATABASE_URL" -X --set=bridge_installation="$INSTALLATION_ID" \
+  --set=bridge_restore_legacy=true --file=deployment-schema-bridge-control-upgrade.sql
+```
+
+For a never-bound bridge, run only the bridge command with `bridge_installation=unbound`. Install the older chart before you resume its reconcilers, and repeat the forward upgrade before you reinstall the restricted hooks. A rollback of only a workload keeps the restricted maintenance hooks.
+
+## Private MCP listener
+
+The chart can run a private MCP listener on loopback for local clients. It is off by default and adds no route. See [Private MCP listener](/guides/mcp/).
 
 ## Upgrade and rollback
 

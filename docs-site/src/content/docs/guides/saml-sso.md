@@ -79,6 +79,10 @@ Xberg does not fetch metadata URLs; you upload the XML. It is limited to 1 MiB a
 
 Manage a provider at `/v1/projects/{project_id}/saml/providers/{provider_id}`, its attribute mapping at `.../attribute-mapping`, and send a test sign-in with `POST .../test`, then read the outcome at `.../test/{test_id}`.
 
+An owner can set the exact SAML attribute name for email or display name. An unset mapping uses the built-in claim selection, and an explicitly mapped email must have exactly one valid value. The connection test sends a signed request to the saved provider, including one that is disabled for sign-in, and checks the signed response and the email mapping. It creates no application session and grants no project access. The result expires after five minutes, only the owner who started the test can read it, and saving new provider settings invalidates earlier results.
+
+Apply the database migration before you deploy a backend that supports mappings. During a rolling update, an older backend refuses to finish sign-in for a provider with explicit mappings, while current replicas complete it. Keep the database guard during a backend-only rollback. If you need older replicas to resume the legacy claim selection, clear the mappings before you roll back.
+
 ## Verify your domains
 
 Domain verification is required before sign-in discovery and before JIT provisioning. Add each company domain, publish the returned TXT record, then verify:

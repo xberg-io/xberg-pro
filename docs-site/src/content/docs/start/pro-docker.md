@@ -32,10 +32,10 @@ The Pro image is published for `linux/amd64` and `linux/arm64`.
 
 You do not need access to any private repository. The Pro Helm chart is public, and its archive carries the database bootstrap script and SQL that the Compose stack mounts. The same chart release also names the image digest that matches those files.
 
-Download the chart and look up the image:
+Download the chart and look up the image. Set `VERSION` to the chart release you were given, or to the latest published release. The example uses `0.7.4`:
 
 ```shell
-export VERSION=0.5.5
+export VERSION=0.7.4
 mkdir xberg-pro && cd xberg-pro
 helm pull oci://us-central1-docker.pkg.dev/xberg-public-assets/helm-charts/pro \
   --version "$VERSION" --untar
@@ -57,23 +57,42 @@ cp "$PRO_CHART_DIR"/charts/_distribution/files/pro-db-bootstrap.sh scripts/
 cp "$PRO_CHART_DIR"/charts/_distribution/files/*.sql sql/
 ```
 
-The chart archive does not carry the small script that enables vector-index claims after the first start. Create it:
+The chart archive does not carry the small script that enables vector-index claims after the first start, because the Helm chart does that in a hook. Create it for Compose:
 
 ```shell
 cat > scripts/pro-db-claims-enable.sh <<'SCRIPT'
 #!/bin/sh
 set -eu
 
+physical_migration_role=xberg_physical_migration_login
+
 : "${POSTGRES_DB:?POSTGRES_DB is required}"
 : "${POSTGRES_PHYSICAL_MIGRATION_PASSWORD:?POSTGRES_PHYSICAL_MIGRATION_PASSWORD is required}"
 
 PGPASSWORD="$POSTGRES_PHYSICAL_MIGRATION_PASSWORD" \
   PGOPTIONS='-c role=xberg_vector_index_activation_admin' \
-  psql --set=ON_ERROR_STOP=1 --username xberg_physical_migration_login --dbname "$POSTGRES_DB" \
-  --command='SELECT vector_control.set_vector_index_ddl_worker_claims_enabled(TRUE)'
+  psql --set=ON_ERROR_STOP=1 --username "$physical_migration_role" --dbname "$POSTGRES_DB" <<'SQL'
+SELECT to_regrole('xberg_vector_index_activation_admin') IS NOT NULL AS activation_role_exists
+\gset
+\if :activation_role_exists
+  SELECT to_regprocedure(
+    'vector_control.set_vector_index_ddl_worker_claims_enabled(boolean)'
+  ) IS NOT NULL AS setter_exists
+  \gset
+  \if :setter_exists
+    SELECT vector_control.set_vector_index_ddl_worker_claims_enabled(TRUE);
+  \else
+    DO $body$ BEGIN RAISE EXCEPTION 'vector index claims setter is missing'; END $body$;
+  \endif
+\else
+  DO $body$ BEGIN RAISE EXCEPTION 'vector index activation role is missing'; END $body$;
+\endif
+SQL
 SCRIPT
 chmod +x scripts/*.sh
 ```
+
+The script fails with a named error when the activation role or the setter function is missing, which means the bootstrap and the image come from different releases.
 
 Always take the bootstrap files from the chart release that matches the image you run. Mixing versions fails the schema checks at startup.
 
@@ -230,8 +249,11 @@ services:
       XBERG_RERANKER_ENGINE_CACHE_MAX_RESIDENT: "2"
       INTEGRATION_KEK: "${INTEGRATION_KEK:-}"
       INTEGRATION_STATE_SECRET: "${INTEGRATION_STATE_SECRET:-}"
+      PRO_INTEGRATION_SYNC_ENABLED: "${PRO_INTEGRATION_SYNC_ENABLED:-false}"
+      PRO_INTEGRATION_SYNC_CURSOR_KEY: "${PRO_INTEGRATION_SYNC_CURSOR_KEY:-}"
       SFTP_HOST_ALLOWLIST: "${SFTP_HOST_ALLOWLIST:-}"
       PRO_AUTH_MODE: "${PRO_AUTH_MODE:-required}"
+      XBERG_DATA_POLICY: "${XBERG_DATA_POLICY:-standard}"
       XBERG_ADMIN_KEY: "${XBERG_ADMIN_KEY:-}"
       XBERG_LICENSE_KEY: "${XBERG_LICENSE_KEY:-}"
     ports:
