@@ -11,15 +11,15 @@ Xberg Pro is licensed by commercial contract, and the container enforces that co
 
 ## What the token is
 
-`XBERG_LICENSE_KEY` is an Ed25519-signed token in the form `base64url(payload).base64url(signature)`. The payload is a JSON claims object naming the licensee, the plan and the validity window. The signature covers a fixed domain-separation prefix followed by the payload bytes, never the bare payload, so it can never be replayed as a signature over some other artifact.
+`XBERG_LICENSE_KEY` is an Ed25519-signed token in the form `base64url(payload).base64url(signature)`. The payload is a JSON object naming the licensee, the plan and the validity window.
 
-Pro verifies the token against the verifying keys baked into the image at build time. A release build can carry more than one key, and a token verifies if it matches any of them. That is what lets Xberg rotate the signing key without re-imaging every deployed instance. There is no other format: a token that does not decode to exactly this shape is invalid.
+Pro verifies the token against the public keys built into the image. An image can carry more than one key, and a token verifies if it matches any of them, so Xberg can rotate the signing key without re-imaging deployed instances. A token that does not decode to exactly this shape is invalid.
 
-The token grants the whole product. Pro is not feature-tiered by license: once a token verifies, every capability is available. The claims schema reserves a `features` field, and no build reads it today.
+The token grants the whole product. Pro is not feature-tiered by license: once a token verifies, every capability is available.
 
 ## A valid license is required to start
 
-Pro refuses to start without a valid license that is unexpired or within its grace window. There is no free tier, no evaluation mode and no degraded-but-running state for a missing or bad license. An absent, malformed or beyond-grace token stops the process with exit code 78 and a message in the logs that names the cause.
+Pro refuses to start without a valid license that is unexpired or within its grace window. Pro has no free tier, no evaluation mode and no degraded-but-running state for a missing or bad license. An absent, malformed or beyond-grace token stops the process with exit code 78 and a message in the logs that names the cause.
 
 This is a deliberate trade of availability for enforceability: a license fault becomes a customer outage. The lifecycle below and the pre-flight verification tool exist to keep that outage from being a surprise.
 
@@ -64,10 +64,10 @@ Alert well before the token's `grace_days` window opens. Grace is a safety margi
 
 ## Renewal
 
-Reissue is tied to your commercial agreement. Contact [contact@xberg.io](mailto:contact@xberg.io) ahead of the 180-day expiry to receive a new token. Set the new `XBERG_LICENSE_KEY` and restart the container, or roll the deployment in Kubernetes. There is no in-place hot swap of the token: Pro reads the environment variable at boot and re-validates it hourly, so a restart is required to pick up a new value.
+Reissue is tied to your commercial agreement. Contact [contact@xberg.io](mailto:contact@xberg.io) ahead of the 180-day expiry to receive a new token. Set the new `XBERG_LICENSE_KEY` and restart the container, or roll the deployment in Kubernetes. Pro cannot swap the token in place: it reads the environment variable at boot and re-validates it hourly, so a restart is required to pick up a new value.
 
 ## No phone-home
 
-Verification is entirely offline. There is no activation server, no heartbeat and no callback to Xberg infrastructure at any point in the lifecycle above, including expiry and grace. This holds for air-gapped deployments exactly as it does for connected ones. See [Air-gapped installs](/operate/air-gapped/).
+Verification is entirely offline. Pro uses no activation server, no heartbeat and no callback to Xberg infrastructure at any point in the lifecycle above, including expiry and grace. This holds for air-gapped deployments exactly as it does for connected ones. See [Air-gapped installs](/operate/air-gapped/).
 
 The license is a cryptographically signed contract artifact that Pro evaluates locally, not a service you depend on. This does not change the enforcement described above: Pro checks the token against a key already inside the image, and the outcome is still a hard stop past grace. It means only that Xberg's own availability never becomes a factor in that outcome.

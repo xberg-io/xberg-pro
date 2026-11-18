@@ -7,7 +7,7 @@ sidebar:
 
 **Available in:** Pro, Enterprise
 
-Webhook delivery attempts can fail for network or policy reasons. The API exposes no fixed set of reason codes. Each attempt is recorded with a `success` flag, an optional `status_code` and a free-text `error`. Internally Xberg also classifies each attempt as transient (retry) or permanent, which decides whether it schedules a retry. See the [webhooks guide](/guides/webhooks/) for setup and payloads.
+Webhook delivery attempts can fail for network or policy reasons. The API exposes no fixed set of reason codes. Each attempt is recorded with a `success` flag, an optional `status_code` and a free-text `error`. Xberg also classifies each failure as transient or permanent. Only transient failures are retried. See the [webhooks guide](/guides/webhooks/) for setup and payloads.
 
 ## How failures are classified
 
@@ -21,7 +21,7 @@ Webhook delivery attempts can fail for network or policy reasons. The API expose
 | SSRF policy violation (`error` is `webhook_url_denied_by_policy` or `webhook_url_not_on_allowlist`) | No             | The webhook URL resolves to a denied IP address, or falls outside a configured allowlist.                                                                                         | Point the webhook at a public endpoint outside the denied ranges, or add it to the allowlist. See [SSRF policy violation](#ssrf-policy-violation). |
 | Too many redirects                                                                                  | No             | The endpoint's response chain exceeded the redirect limit.                                                                                                                        | Point the webhook URL directly at its final destination.                                                                                           |
 
-Delivery makes up to 5 attempts in total, the first attempt plus 4 retries. The retries wait 5 s, 30 s, 300 s and 300 s, plus jitter, so the whole window is roughly 635 seconds and not 24 hours. On Pro, `PRO_WEBHOOK_MAX_RETRIES` changes the attempt count and `PRO_WEBHOOK_HTTP_TIMEOUT_SECS` the per-request timeout. See [Xberg Pro configuration](/reference/pro-configuration/#tuning). On Enterprise the schedule is fixed. See [Xberg Enterprise configuration](/reference/enterprise-configuration/#webhook-service).
+Delivery makes up to 5 attempts: the first attempt plus 4 retries. The retries wait 5 s, 30 s, 300 s and 300 s, plus jitter, so the whole window is roughly 635 seconds and not 24 hours. On Pro, `PRO_WEBHOOK_MAX_RETRIES` changes the attempt count and `PRO_WEBHOOK_HTTP_TIMEOUT_SECS` the per-request timeout. See [Xberg Pro configuration](/reference/pro-configuration/#tuning). On Enterprise the schedule is fixed. See [Xberg Enterprise configuration](/reference/enterprise-configuration/#webhook-service).
 
 ## SSRF policy violation
 
