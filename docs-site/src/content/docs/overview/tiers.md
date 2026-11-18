@@ -92,8 +92,11 @@ Pro enforces monthly job and page quotas per project. A request over quota gets 
 | Hybrid search: vector plus full-text, rank fusion    | No   | Yes | Yes        |
 | Reranking: local cross-encoder, or an LLM you choose | No   | Yes | Yes        |
 | Embedding-model migration as a tracked job           | No   | Yes | Yes        |
+| Private MCP listener, off by default                 | No   | Yes | Yes        |
 
 Retrieval runs on PostgreSQL with pgvector, defaults to hybrid mode and fuses the two rankings by reciprocal rank. Retrieval is the whole surface: there is no chat or answer endpoint. See [RAG](/guides/rag/).
+
+The private MCP listener is off by default and binds to loopback when enabled. It serves one mode per listener: `rag` (list collections, list documents, retrieve) or `extraction` (submit a document, poll status, read the result). Pro and Enterprise ship it with the same configuration surface, and neither routes it through public REST or ingress. See [MCP](/guides/mcp/).
 
 ## Content sources and delivery
 
@@ -117,7 +120,8 @@ Pro crawls over plain HTTP. A crawl that needs a rendered page, such as a browse
 | Capability                                                     | Core | Pro | Enterprise |
 | -------------------------------------------------------------- | ---- | --- | ---------- |
 | Single sign-on: any OIDC provider, email-domain allowlisting   | No   | Yes | Yes        |
-| SAML 2.0 and SCIM provisioning                                 | No   | No  | Yes        |
+| SAML 2.0 single sign-on                                        | No   | No  | Yes        |
+| SCIM provisioning                                              | No   | No  | Yes        |
 | Per-project isolation, enforced in the database on every query | No   | Yes | Yes        |
 | Usage reporting and monthly job and page quotas                | No   | Yes | Yes        |
 | Team members, invitations, owner and member roles              | No   | No  | Yes        |

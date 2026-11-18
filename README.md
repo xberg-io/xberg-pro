@@ -43,6 +43,7 @@ One container plus PostgreSQL, for a single team on a single node.
 - Web console with a playground, job history and settings
 - Crawling, content enrichment, and source connectors for Google Drive, Dropbox, OneDrive, SharePoint, Notion, Confluence, S3, GCS, Azure Blob and SFTP
 - RAG collections with hybrid search and reranking on PostgreSQL with pgvector
+- An opt-in private MCP listener for local MCP clients, off by default (see the [MCP guide](https://pro.xberg.io/guides/mcp/))
 - Auto-Tune, which searches your own corpus for the settings that extract it best
 - Append-only, hash-chained audit log
 - Prometheus metrics and OpenTelemetry traces

@@ -20,7 +20,7 @@ Data residency is a deployment choice, not a setting. You choose the cloud, regi
 | Uploaded documents and extraction results   | Your object storage or local disk                              | `STORAGE_PROVIDER` (`fs`, `s3`, `gcs`, `azure`) with `STORAGE_BUCKET` or `STORAGE_FS_ROOT`                             |
 | Job metadata, audit log, projects, API keys | Your PostgreSQL                                                | `DATABASE_URL`                                                                                                         |
 | RAG chunks and vectors                      | Your PostgreSQL, with pgvector                                 | `DATABASE_URL`                                                                                                         |
-| Extraction result cache (Enterprise)        | NATS JetStream key-value store                                 | NATS runs in your cluster                                                                                              |
+| Extraction result cache (Enterprise)        | NATS JetStream key-value store, 24-hour TTL                    | NATS runs in your cluster                                                                                              |
 | Local result cache (Pro)                    | Local disk, and your object storage when the object tier is on | `CACHE_ENABLED`, `CACHE_DIR`, `CACHE_MAX_BYTES`, `CACHE_TTL_SECS`, `CACHE_OBJECT_STORE_ENABLED`, `CACHE_OBJECT_PREFIX` |
 | Integration credentials and OAuth tokens    | Your PostgreSQL, encrypted with AES-256-GCM                    | `INTEGRATION_KEK`                                                                                                      |
 | Model weights                               | Local disk or your object storage, rooted at `XBERG_CACHE_DIR` | `HF_HOME` (Pro), `worker.modelCache` (Enterprise)                                                                      |
@@ -35,6 +35,8 @@ An accepted extraction-only job keeps that restriction if you later change the o
 
 PostgreSQL remains required. Operational records include identifiers, ownership, filenames, MIME types, configuration, lifecycle and recovery information, and usage counters. Extraction-only mode suppresses document-derived submission metadata, bounds persisted extraction failures and skips Pro structured extraction recording. Input and result objects still use your configured storage provider and retention rules.
 
+The private [MCP listener](/guides/mcp/) follows the data policy. The `rag` mode requires the `standard` policy, and the `extraction` mode requires `extraction_only`. The listener is disabled by default, binds to loopback when enabled, and is not exposed through public ingress.
+
 The system cannot satisfy a requirement that no customer information enters PostgreSQL. `XBERG_DATA_POLICY=strict_sql` is rejected because no separate strict SQL policy exists.
 
 ## What leaves a self-hosted deployment
@@ -43,7 +45,7 @@ Outbound connections depend on your configuration.
 
 - **Your configured infrastructure.** Services connect to PostgreSQL, object storage and, on Enterprise, the NATS broker. Workload identity can also contact the cloud provider's credential endpoints, such as AWS STS or the EKS Pod Identity agent.
 - **Model downloads.** On first use, models come from Hugging Face Hub and, for Tesseract language files that the image does not ship, from GitHub. A deployment without internet egress pre-seeds the cache instead. See [Air-gapped installation](/operate/air-gapped/).
-- **LLM providers, only when you configure one.** Structured extraction, vision OCR and LLM reranking send document content to the provider named in `XBERG_MANAGED_LLM_PROVIDER`, `XBERG_VLM_OCR_MODEL` or `PRO_VISION_BASE_URL`. With no provider configured, no document content leaves the deployment.
+- **LLM providers, only when you configure one.** Structured extraction, vision OCR and LLM reranking send document content to the provider named in `XBERG_MANAGED_LLM_PROVIDER`, `XBERG_VLM_OCR_MODEL` or `PRO_VISION_BASE_URL`. On Enterprise, `XBERG_VLM_OCR_BASE_URL` (Helm: `worker.env.XBERG_VLM_OCR_BASE_URL`) sends vision OCR to an OpenAI-compatible model server you host, such as vLLM or Ollama. The endpoint allowlist (`VLM_ENDPOINT_ALLOWLIST` on Enterprise, `PRO_VLM_ENDPOINT_ALLOWLIST` on Pro) must name any private host. With no provider configured, no document content leaves the deployment.
 - **Webhooks.** Deliveries go to the URLs you register. The outbound policy refuses private and link-local addresses. See [Security](/overview/security/).
 - **Your identity provider, only when OIDC login is configured.** Token verification fetches the issuer's JWKS. Set `OIDC_JWKS_URI` to skip discovery, or leave it unset and Xberg asks the issuer at `OIDC_ISSUER_URL`.
 - **OAuth providers, only when the integration hub is configured.** Access goes to the provider's APIs with the OAuth client you registered.
