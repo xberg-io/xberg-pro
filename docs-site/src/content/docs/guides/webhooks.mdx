@@ -1,0 +1,272 @@
+---
+title: Webhooks
+description: Receive a signed HTTP POST when a job finishes, with per-request webhooks on Pro and Enterprise and managed subscriptions on Enterprise.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+**Available in:** Pro and Enterprise (inline webhooks). Enterprise only (managed webhooks).
+
+Give Xberg a URL and it POSTs the result as soon as a job reaches a terminal status, with no poller and no keep-alive. Polling suits prototypes; webhooks suit production.
+
+Both tiers deliver the same body, the same headers and the same retry schedule, so a receiver written against Pro works unchanged on Enterprise. The difference is how you register the URL:
+
+| Mode | Tier | Registered with |
+|------|------|-----------------|
+| Inline webhook | Pro, Enterprise | A `webhook` object on each request |
+| Managed webhook | Enterprise | A project-level subscription, once, through the API or dashboard |
+
+On Pro, webhooks are delivered in-process as fire-and-forget tasks that never block extraction. `PRO_WEBHOOK_MAX_RETRIES` sets the attempt count; the default is 5, and a value outside 1-10 stops the service at start-up. On Enterprise, deliveries are queued in NATS and consumed by a dedicated webhook service, which gives at-least-once delivery across restarts. Every retry adds jitter so jobs that fail together do not retry together.
+
+## Inline webhooks
+
+Pass a `webhook` object on `POST /v1/extract`. It applies to every document and URL in the request:
+
+```bash
+curl -X POST "$XBERG_URL/v1/extract" \
+  -H "Authorization: Bearer $XBERG_API_KEY" \
+  -F "file=@invoice.pdf" \
+  -F 'webhook={"url":"https://example.com/hooks/xberg","secret":"REPLACE_WITH_RANDOM_SECRET","metadata":{"request_id":"abc123"}}'
+```
+
+| Field | Rule |
+|-------|------|
+| `url` | Required. Must be `https://`; an empty URL is refused. Private, loopback and metadata-service destinations are denied |
+| `secret` | Optional HMAC-SHA256 signing secret. Without it, the delivery carries no signature |
+| `metadata` | Optional string map echoed back in the payload. At most 100 entries, keys of 1-255 characters, values up to 1024 characters, 8192 bytes in total |
+
+The same `webhook` object works on `POST /v1/auto-tune` and on the asynchronous RAG operations (ingest, reindex and embedding migration). A crawl request receives one `crawl.completed` or `crawl.failed` callback per crawl parent, and an extracting crawl also sends `job.completed` or `job.failed` for each child document.
+
+One case never reaches an inline receiver. If the worker holding a job stops without writing a result and no retry is left, a background reaper fails the job and sends `job.failed` from the job row, which does not carry the inline config. On Enterprise the event goes to the project's managed webhooks. On Pro, poll `GET /v1/jobs/{id}` to catch it.
+
+## Managed webhooks
+
+Enterprise projects register a subscription once, and every job in the project then delivers to it. Create one with the project's control-plane API:
+
+```bash
+curl -X POST "$XBERG_URL/v1/projects/$PROJECT_ID/webhooks" \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "orders-pipeline",
+    "url": "https://example.com/hooks/xberg",
+    "events": ["job.completed", "job.failed", "job.cancelled"]
+  }'
+```
+
+The response returns the signing `secret` once, including when you supplied it. Store it in your secret manager. Omit `secret` to have the server generate one. Other routes under `/v1/projects/{id}/webhooks/{wh_id}` read, update and delete a subscription, and `POST .../test` sends a synthetic payload (`"event": "test"`) through the same deliverer, with the same signature and headers, so you can verify your handler before you go live.
+
+Supported events are `job.completed`, `job.failed`, `job.cancelled`, `crawl.completed` and `crawl.failed`. The crawl events are available on managed subscriptions only.
+
+## Payload
+
+On success Xberg POSTs JSON like this:
+
+```json
+{
+  "event": "job.completed",
+  "event_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "job_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "timestamp": "2026-06-20T14:09:11.481632+00:00",
+  "metadata": { "request_id": "abc123" },
+  "results": { "content": "extracted text", "metadata": {} }
+}
+```
+
+On failure, the body carries an `error` object instead of `results`:
+
+```json
+{
+  "event": "job.failed",
+  "event_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567891",
+  "job_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "timestamp": "2026-06-20T14:09:11.481632+00:00",
+  "error": { "code": "EXTRACTION_ERROR", "message": "unsupported mime type" }
+}
+```
+
+A cancelled job (`DELETE /v1/jobs/{id}`) sends `job.cancelled` with neither `results` nor `error`. Your receiver must handle it.
+
+- `event_id` stays stable across every delivery attempt of one event. Deduplicate on it.
+- `timestamp` is RFC 3339 in UTC, the moment the job reached its terminal status.
+- `error.code` is one of `EXTRACTION_ERROR`, `FETCH_ERROR`, `INVALID_CONFIG`, `STRUCTURED_EXTRACTION_ERROR`, `STORAGE_ERROR` or `INTERNAL_ERROR`. Pro reports the specific cause. Enterprise reports `EXTRACTION_ERROR` when the engine rejected the document and `INTERNAL_ERROR` for everything else, so treat any other value as a generic failure.
+- `metadata` appears only for inline webhooks that supplied it.
+- `results` is the same document `GET /v1/jobs/{id}` returns as `result`. It is present on `job.completed` when it fits in 100 KiB; otherwise fetch it from the job endpoint.
+
+Deliveries carry these headers:
+
+| Header | Value |
+|--------|-------|
+| `Content-Type` | `application/json` |
+| `User-Agent` | `xberg-webhook/0.1.0`, a fixed literal that does not track the release version |
+| `X-Webhook-Signature` | `t=<unix seconds>,v1=<hex>`, present when a secret is configured |
+| `traceparent` | W3C trace context, for correlating the delivery with server-side spans |
+
+The endpoint must respond within 30 seconds on Pro by default (`PRO_WEBHOOK_HTTP_TIMEOUT_SECS`, 1-300). Plain `http://` is rejected.
+
+## Verify the signature
+
+`X-Webhook-Signature` carries `t`, the unix time of the delivery attempt, and `v1`, the hex HMAC-SHA256 of `"<t>.<raw request body>"` keyed with your webhook secret. Verify before trusting the payload:
+
+1. Reject the delivery when `t` is more than 5 minutes from your clock. This closes replay of a captured request.
+2. Recompute the HMAC over `t`, a dot and the raw body, and compare it with `v1` in constant time.
+
+A webhook configured without a secret carries no signature header, and nothing authenticates it. Set a secret for anything beyond a prototype.
+
+<Tabs syncKey="lang">
+<TabItem label="Python">
+
+```python title="Python (FastAPI)"
+import hmac
+import hashlib
+import time
+from fastapi import FastAPI, Header, HTTPException, Request
+
+SECRET = b"..."  # your webhook secret
+TOLERANCE = 300  # seconds
+
+app = FastAPI()
+
+@app.post("/webhooks/xberg")
+async def receive(request: Request,
+                  x_webhook_signature: str = Header(...)):
+    body = await request.body()
+    parts = dict(p.split("=", 1) for p in x_webhook_signature.split(","))
+    if abs(time.time() - int(parts.get("t", "0"))) > TOLERANCE:
+        raise HTTPException(401, "stale signature")
+    signed = f"{parts['t']}.".encode() + body
+    expected = hmac.new(SECRET, signed, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(parts.get("v1", ""), expected):
+        raise HTTPException(401, "bad signature")
+    # fetch GET /v1/jobs/{job_id} and process
+    return {"ok": True}
+```
+
+</TabItem>
+<TabItem label="TypeScript">
+
+```ts title="TypeScript (Node, Express)"
+import crypto from "node:crypto";
+import express from "express";
+
+const SECRET = process.env.XBERG_WEBHOOK_SECRET!;
+const TOLERANCE_SECONDS = 300;
+const app = express();
+
+app.post("/webhooks/xberg", express.raw({ type: "application/json" }),
+  (req, res) => {
+    const parts = Object.fromEntries(
+      (req.header("x-webhook-signature") ?? "")
+        .split(",")
+        .map((p) => p.split("=", 2) as [string, string]),
+    );
+    const t = Number(parts.t ?? 0);
+    if (Math.abs(Date.now() / 1000 - t) > TOLERANCE_SECONDS) {
+      return res.status(401).end();
+    }
+    const expected = crypto
+      .createHmac("sha256", SECRET)
+      .update(`${parts.t}.`)
+      .update(req.body)
+      .digest("hex");
+    const given = Buffer.from(parts.v1 ?? "", "hex");
+    if (given.length !== 32 ||
+        !crypto.timingSafeEqual(given, Buffer.from(expected, "hex"))) {
+      return res.status(401).end();
+    }
+    // fetch GET /v1/jobs/{job_id} and process
+    res.json({ ok: true });
+  });
+```
+
+</TabItem>
+<TabItem label="Go">
+
+```go title="Go (net/http)"
+package main
+
+import (
+    "crypto/hmac"
+    "crypto/sha256"
+    "encoding/hex"
+    "io"
+    "net/http"
+    "strconv"
+    "strings"
+    "time"
+)
+
+var secret = []byte("...")
+
+const tolerance = 300 * time.Second
+
+func receive(w http.ResponseWriter, r *http.Request) {
+    body, _ := io.ReadAll(r.Body)
+    var t, v1 string
+    for _, part := range strings.Split(r.Header.Get("X-Webhook-Signature"), ",") {
+        if k, v, ok := strings.Cut(part, "="); ok {
+            switch k {
+            case "t":
+                t = v
+            case "v1":
+                v1 = v
+            }
+        }
+    }
+    ts, err := strconv.ParseInt(t, 10, 64)
+    if err != nil || time.Since(time.Unix(ts, 0)).Abs() > tolerance {
+        http.Error(w, "stale signature", http.StatusUnauthorized)
+        return
+    }
+    mac := hmac.New(sha256.New, secret)
+    mac.Write([]byte(t + "."))
+    mac.Write(body)
+    expected := hex.EncodeToString(mac.Sum(nil))
+    if !hmac.Equal([]byte(v1), []byte(expected)) {
+        http.Error(w, "bad signature", http.StatusUnauthorized)
+        return
+    }
+    // fetch GET /v1/jobs/{job_id} and process
+    w.WriteHeader(http.StatusOK)
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Retries
+
+Delivery is at least once, on the same schedule for both tiers. If your endpoint returns a non-2xx status or times out:
+
+- Xberg makes up to 5 attempts in total.
+- Backoff runs 5 seconds, 30 seconds, 5 minutes, 5 minutes, about 10 minutes in all, and then the delivery is abandoned.
+- A `4xx` other than `429` is permanent, so retries stop.
+- `429`, `5xx` and connection errors retry until the cap.
+
+Deduplicate on `event_id`. The same event can arrive more than once if your endpoint responds slowly. See [Webhook errors](/reference/webhook-errors/) for delivery failure codes.
+
+## Auto-tune events
+
+An optional `webhook` object on `POST /v1/auto-tune` delivers `auto_tune.completed` or `auto_tune.failed`. The callback carries a stable `event_id`, `project_id`, `auto_tune_job_id`, `status`, `timestamp`, trial counts and an optional best score or error. Fetch the full result from `GET /v1/auto-tune/{id}/result`. Stopping a run requests cooperative completion and sends no separate cancellation event. See [Auto-tune](/guides/auto-tune/).
+
+## Delivery history and redelivery
+
+Enterprise records each managed delivery attempt before it sends the HTTP request. With a project API key, read the newest attempts with `GET /v1/webhooks/{webhook_id}/deliveries?limit=50&offset=0`, and one attempt with `GET /v1/webhooks/{webhook_id}/deliveries/{delivery_id}`. The control-plane equivalents are `GET /v1/projects/{id}/webhooks/{wh_id}/deliveries` and `.../deliveries/{delivery_id}`.
+
+Lists include event IDs, attempt numbers, timestamps, HTTP status and duration. A missing `completed_at` means the sender has not recorded an outcome; it does not prove the endpoint received nothing. A single attempt adds request and response previews of at most 4096 UTF-8 bytes each, with truncation flags. Previews can contain your document data, but they never include authentication or signature headers.
+
+History and the retained event payload become eligible for deletion after seven days. Cleanup runs every six hours while the webhook service is running. Deleting a subscription deletes its history. Inline callbacks and test requests are not part of the history.
+
+Project owners can queue a retained, completed attempt again:
+
+```bash
+curl -X POST "$XBERG_URL/v1/projects/$PROJECT_ID/webhooks/$WEBHOOK_ID/deliveries/$DELIVERY_ID/retry" \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Idempotency-Key: retry-2026-06-20-001"
+```
+
+The subscription must still be active. A `202` response returns a new `delivery_id`, and the original attempt stays unchanged. The optional `Idempotency-Key` header takes 1-128 ASCII characters; reusing it for the same source returns the same acceptance, and using it for another source returns `409`. A subscription can have one outstanding request and accept one new request every ten seconds, and a project accepts ten per minute; limits answer `429` with `Retry-After`.
+
+Redelivery sends the original serialized event bytes, including the event ID, to the subscription's current URL with its current secret and a fresh signature timestamp. Sources older than seven days cannot be replayed.
