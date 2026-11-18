@@ -52,7 +52,7 @@ By default, input files, results, page images and cache entries stay in storage 
 
 ## Delete expired results on AWS S3 (optional)
 
-Set `PRO_RESULT_S3_CLEANUP_ENABLED=true` on a generation to have the worker delete the specific S3 object version of each expired main result. It is off by default (`false` in the chart values). Use it only when the installation is authorized to delete eligible results physically.
+Set `PRO_RESULT_S3_CLEANUP_ENABLED=true` on a generation to have the worker delete the specific S3 object version of each expired main result. It is off by default (`false` in the chart values). Use it only when your retention policy allows eligible results to be deleted physically.
 
 Requirements:
 
@@ -90,7 +90,7 @@ If a result upload was not acknowledged, the writer records an unsettled intent 
      --project-id "$PROJECT_ID" --job-id "$JOB_ID" --artifact-id "$ARTIFACT_ID"
    ```
 
-   The command settles the intent only when a signed read confirms the bytes and version. An inconclusive read leaves it unsettled. The result stays expired, and deletion remains subject to the usual checks. For an abandoned input, use `reconcile-s3-input --project-id ... --physical-write-id ...`.
+   The command settles the intent only when a signed read confirms the bytes and version. An inconclusive read leaves it unsettled. The result stays expired, and deletion still passes the usual checks. For an abandoned input, use `reconcile-s3-input --project-id ... --physical-write-id ...`.
 
 4. Before you downgrade the chart or binary, finish outstanding requests, then run another maintenance upgrade with `migrations.retainedS3ReconciliationGrants=revoke` and confirm the grants are gone.
 
