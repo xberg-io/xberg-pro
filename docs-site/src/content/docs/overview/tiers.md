@@ -98,7 +98,7 @@ Pro enforces monthly job and page quotas per project. A request over quota gets 
 
 Retrieval runs on PostgreSQL with pgvector, defaults to hybrid mode and fuses the two rankings by reciprocal rank. Retrieval is the whole surface: there is no chat or answer endpoint. See [RAG](/guides/rag/).
 
-The private MCP listener is off by default and binds to loopback when enabled. It serves one mode per listener: `rag` (list collections, list documents, retrieve) or `extraction` (submit a document, poll status, read the result). Pro and Enterprise ship it with the same configuration surface, and neither routes it through public REST or ingress. See [MCP](/guides/mcp/).
+The private MCP listener is off by default and binds to loopback when enabled. It serves one mode per listener: `rag` (list collections, list documents, retrieve) or `extraction` (submit a document, poll status, read the result; on Pro, chart 0.7.5 or later). Pro and Enterprise ship it with the same configuration surface, and neither routes it through public REST or ingress. See [MCP](/guides/mcp/).
 
 ## Content sources and delivery
 

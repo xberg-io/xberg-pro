@@ -85,4 +85,4 @@ Events report each crawled page, discovered URL and error, and a final completio
 - A `400` names an unknown `crawl_config` key or a value above a maximum. A `503` means crawl extraction is not available on this instance.
 - Requests go through a resolver-protected HTTP client, and private, loopback and metadata-service addresses are blocked.
 
-With Kubernetes network policies enabled, crawling reaches the public web on the ports in `networkPolicy.publicEgressPorts` (80 and 443 by default). A seed on any other port needs its own `networkPolicy.extraEgress` rule, or the request times out without naming the policy. See [Pro Helm](/start/pro-helm/#configuration) and [Enterprise Helm](/start/enterprise-helm/#network-policies).
+With Kubernetes network policies enabled, crawling reaches the public web on the ports in `networkPolicy.publicEgressPorts` (80 and 443 by default). A seed on any other port needs its own `networkPolicy.extraEgress` rule, or the request times out without naming the policy. See [Pro Helm](/start/pro-helm/#network-policies) and [Enterprise Helm](/start/enterprise-helm/#network-policies).

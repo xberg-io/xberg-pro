@@ -189,7 +189,7 @@ The list shows `xberg-pro-secrets`, `xberg-pro-schema-migrator`, `xberg-pro-role
 
 ## Configuration
 
-Edit `$PRO_VALUES_FILE`, which you copied from the example below. Replace the hostnames, OIDC settings, administrator addresses, TLS Secret name and PostgreSQL CIDR. The example names every Secret the chart reads, so keep its Secret keys complete.
+Edit `$PRO_VALUES_FILE`, which you copied from the chart in step 1; the example below matches it. Replace the hostnames, OIDC settings, administrator addresses, TLS Secret name and PostgreSQL CIDR. The example names every Secret the chart reads, so keep its Secret keys complete.
 
 ```yaml title="pro-values.yaml"
 imagePullSecrets: []

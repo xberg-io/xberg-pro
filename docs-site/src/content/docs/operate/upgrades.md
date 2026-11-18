@@ -39,18 +39,18 @@ Keep the administrator password and the eight role passwords stable between rout
 
 ## Pro on Helm
 
-For a configuration-only change, keep the installed chart version and use the chart source that matches it. Set `PRO_CHART_SOURCE` to the extracted chart directory (or the chart archive) and `PRO_VALUES_FILE` to your values file, as in the [Pro Helm install](/start/pro-helm/#download-the-chart). The check below refuses a different version:
+For a configuration-only change, keep the installed chart version and use the chart source that matches it. Set `PRO_CHART_DIR` to the extracted chart directory and `PRO_VALUES_FILE` to your values file, as in the [Pro Helm install](/start/pro-helm/#download-the-chart). The check below refuses a different version:
 
 ```shell
-export PRO_CHART_SOURCE=/path/to/pro
+export PRO_CHART_DIR=/path/to/pro
 export PRO_VALUES_FILE=/path/to/pro-values.yaml
 export VERSION=$(helm get metadata xberg-pro -n xberg-pro -o json | jq -er .version)
-helm show chart "$PRO_CHART_SOURCE" | grep -Fxq "version: $VERSION" || {
+helm show chart "$PRO_CHART_DIR" | grep -Fxq "version: $VERSION" || {
   printf 'Use the chart archive matching the installed version for configuration-only upgrades.\n' >&2
   exit 1
 }
 helm upgrade xberg-pro \
-  "$PRO_CHART_SOURCE" \
+  "$PRO_CHART_DIR" \
   -n xberg-pro -f "$PRO_VALUES_FILE" \
   --set migrations.enabled=true \
   --rollback-on-failure --wait --timeout 110m

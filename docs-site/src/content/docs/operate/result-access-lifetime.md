@@ -32,7 +32,7 @@ PRO_AUTO_TUNE_ENABLED=false
 | `PRO_RESULT_ACCESS_LIFETIME_SECS` | Seconds a result stays readable after the job finishes. 1 to 315360000. |
 | `PRO_RESULT_ACCESS_POLICY_EPOCH`  | A positive integer you increase each time you change the policy.        |
 
-Set both result access variables or neither. Setting only one makes startup fail. Startup also fails if the policy is combined with a single-instance install, the standard data policy or shared result caches. The private MCP listener in extraction mode (`mcp.mode=extraction`) also requires both variables.
+Set both result access variables or neither. Setting only one makes startup fail. Startup also fails if the policy is combined with a single-instance install, the standard data policy or shared result caches. The private MCP listener in extraction mode (`mcp.mode=extraction`, Pro chart 0.7.5 or later) also requires both variables.
 
 The policy admits extraction jobs submitted inline or by multipart upload. These are refused while it is on: integration sources, document version attachment, crawl, and presigned upload creation and confirmation (including confirming a batch staged before you enabled it). Run those flows on a separate installation.
 

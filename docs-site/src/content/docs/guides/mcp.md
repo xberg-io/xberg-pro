@@ -108,7 +108,7 @@ The chart manages the listener's environment variables, so Helm installs set onl
 | Variable                 | Value                                                                                                     |
 | ------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `MCP_LISTENER_ENABLED`   | `true` enables the listener.                                                                              |
-| `MCP_LISTENER_MODE`      | `rag` or `extraction`.                                                                                    |
+| `MCP_LISTENER_MODE`      | `rag` or `extraction` (Pro: `extraction` needs chart 0.7.5 or later).                                     |
 | `MCP_LISTENER_ADDR`      | A socket address with a fixed port, such as `127.0.0.1:8095`.                                             |
 | `MCP_ALLOWED_HOSTS`      | Comma-separated host and port pairs the client may send, such as `127.0.0.1:8095`.                        |
 | `MCP_ALLOWED_ORIGINS`    | Comma-separated HTTP or HTTPS origins with explicit ports. Leave unset for clients that send no `Origin`. |

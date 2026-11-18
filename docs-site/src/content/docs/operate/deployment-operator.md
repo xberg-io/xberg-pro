@@ -259,7 +259,7 @@ By default, migrations run in `maintenance` mode, which stops the workload. `mig
 A failure during schema apply, maintenance grant reconciliation, controller API setup or role validation can leave the database on a different contract than the running image expects. When any of these hooks fails, the Pro chart keeps the StatefulSet scaled down and records the original replica count in the annotation `rollback.xberg.io/original-replicas`.
 
 1. Keep the workload scaled down and leave the fence in place.
-2. Capture the failed hook's logs (`helm get hooks xberg-pro -n xberg-pro` and the hook job logs) and the active schema receipt, and send them to [support](/more/support/).
+2. Capture the failed hook's logs (`helm get hooks xberg-pro -n xberg-pro` and the hook job logs) and send them to [support](/more/support/).
 3. Do not restart the previous image until support confirms it matches the live database.
 4. For forward recovery, fix the verified cause and rerun the reviewed maintenance upgrade with the same chart, values and images. A newer chart or image can change the receipt and need a separate recovery.
 

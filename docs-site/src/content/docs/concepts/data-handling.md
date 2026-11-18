@@ -35,7 +35,7 @@ An accepted extraction-only job keeps that restriction if you later change the o
 
 PostgreSQL remains required. Operational records include identifiers, ownership, filenames, MIME types, configuration, lifecycle and recovery information, and usage counters. Extraction-only mode suppresses document-derived submission metadata, bounds persisted extraction failures and skips Pro structured extraction recording. Input and result objects still use your configured storage provider and retention rules.
 
-The private [MCP listener](/guides/mcp/) follows the data policy. The `rag` mode requires the `standard` policy, and the `extraction` mode requires `extraction_only`. The listener is disabled by default, binds to loopback when enabled, and is not exposed through public ingress.
+The private [MCP listener](/guides/mcp/) follows the data policy. The `rag` mode requires the `standard` policy, and the `extraction` mode (Pro chart 0.7.5 or later) requires `extraction_only`. The listener is disabled by default, binds to loopback when enabled, and is not exposed through public ingress.
 
 The system cannot satisfy a requirement that no customer information enters PostgreSQL. `XBERG_DATA_POLICY=strict_sql` is rejected because no separate strict SQL policy exists.
 

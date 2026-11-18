@@ -113,8 +113,6 @@ See [Authentication](/concepts/authentication/) for how API keys, the bootstrap 
 | `PRO_RAG_ENABLED`       | `true`     | Start the RAG runtime at boot. `false` makes every `/v1/rag/*` request return `404` with `rag.disabled`. A valid license grants RAG, so this saves startup cost and does not gate access. |
 | `PRO_AUTO_TUNE_ENABLED` | `true`     | Start the auto-tune runtime at boot. `false` makes `/v1/auto-tune` and `/v1/tuning-profiles` return `404` with `auto_tune.disabled`.                                                      |
 
-<a id="dashboard-sign-in-with-oidc"></a>
-
 ### Web console sign-in with OIDC
 
 The bootstrap API key authenticates REST requests. Human web console access needs an identity provider. An API-only install says so on its sign-in page.
@@ -502,7 +500,7 @@ Pro can serve MCP (version 2026-07-28) on a private `/mcp` listener. It is off b
 | Variable                 | Default | Description                                                                                                                                   |
 | ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MCP_LISTENER_ENABLED`   | `false` | Start the listener.                                                                                                                           |
-| `MCP_LISTENER_MODE`      | `rag`   | `rag` or `extraction`.                                                                                                                        |
+| `MCP_LISTENER_MODE`      | `rag`   | `rag` or `extraction` (`extraction` needs chart 0.7.5 or later).                                                                              |
 | `MCP_LISTENER_ADDR`      | none    | Socket address with a fixed port, such as `127.0.0.1:8095`. Required when enabled.                                                            |
 | `MCP_ALLOWED_HOSTS`      | none    | Comma-separated `host:port` authorities the listener accepts. Include the authority the client sends. Required when enabled.                  |
 | `MCP_ALLOWED_ORIGINS`    | empty   | Comma-separated HTTP or HTTPS origins with explicit ports. Leave it empty for clients that send no `Origin` header.                           |

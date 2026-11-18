@@ -199,9 +199,6 @@ migrations:
   roleAdminDatabaseUrlSecret:
     name: xberg-role-admin
     key: database-url
-  brokerTransitionDatabaseUrlSecret:
-    name: ""
-    key: ""
 vectorIndexWorker:
   logins:
     worker: xberg_index_worker_login
@@ -435,7 +432,7 @@ kubectl -n xberg-enterprise logs job/REPLACE_WITH_FAILED_JOB_NAME > hook.log
 kubectl -n xberg-enterprise get events --sort-by=.lastTimestamp > events.log
 ```
 
-Also note the installed and target chart versions, and your values file with secrets removed. Then pause every reconciler of the release, leave the chart, values and database unchanged, and contact [support](/more/support/). Bridge write-permission changes between chart versions are covered in the version notes of [Upgrades and migrations](/operate/upgrades/).
+Also note the installed and target chart versions, and your values file with secrets removed. Then pause every reconciler of the release, leave the chart, values and database unchanged, and contact [support](/more/support/). Before an upgrade that changes database privileges, see [Upgrades and migrations](/operate/upgrades/).
 
 ## Private MCP listener
 
