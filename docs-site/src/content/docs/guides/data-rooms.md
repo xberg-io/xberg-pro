@@ -7,11 +7,13 @@ sidebar:
 
 **Available in:** Enterprise
 
-A data room is an ordered set of a project's documents that you share with project members, invited guests or, once published, anyone who holds its public link. Rooms live in the Enterprise API under `/v1/rooms`. On Pro, every room method fails before it sends a request.
+Data rooms share an ordered set of a project's documents with members, invited guests or, once published, anyone who holds the public link.
 
-## Check availability
+Rooms live in the Enterprise API under `/v1/rooms`. On Pro, every room method fails before it sends a request.
 
-The plan decides whether rooms exist. The Enterprise `GET /healthz` reports `data_rooms.enabled`. When rooms are off, every room route, including the public ones, answers `404` with the code `data_room.disabled`. The SDKs raise this as `DataRoomsDisabledError`, a subclass of their not-found error, so code that already handles `404` still matches.
+## Enable data rooms
+
+Data rooms are on by default. Set `DATA_ROOMS_ENABLED=false` under `api.env` to switch them off; see [Limits](#limits). To check the state, call `GET /healthz`, which reports `data_rooms.enabled`. When rooms are off, every room route, including the public ones, answers `404` with the code `data_room.disabled`. The SDKs raise this as `DataRoomsDisabledError`, a subclass of their not-found error, so code that already handles `404` still matches.
 
 ## Create a room and add documents
 
@@ -45,7 +47,7 @@ The version travels in response bodies, not in an `ETag` header. Each versioned 
 
 ## Members and invitations
 
-Room members have a role such as `VIEWER` or `EDITOR`. Manage them at `/v1/rooms/{id}/members` and `/v1/rooms/{id}/members/{user_id}`, move ownership with `/v1/rooms/{id}/ownership`, and leave with `POST /v1/rooms/{id}/leave`. Invite a guest by email:
+Room members hold the role `VIEWER` or `EDITOR`. Ownership moves only by transfer, never by invitation or role change. Manage members at `/v1/rooms/{id}/members` and `/v1/rooms/{id}/members/{user_id}`, move ownership with `/v1/rooms/{id}/ownership`, and leave with `POST /v1/rooms/{id}/leave`. Invite a guest by email:
 
 ```bash
 curl -X POST "$XBERG_URL/v1/rooms/$ROOM_ID/invitations" \
@@ -68,7 +70,7 @@ curl -X PUT "$XBERG_URL/v1/rooms/$ROOM_ID/publication" \
   -d '{ "state": "published", "mode": "live", "download_allowed": true }'
 ```
 
-The response carries a `slug`. A published room is readable without credentials under `/public/rooms/{slug}`, with item listing, content and, when allowed, download. A room that does not allow downloads answers `403` on the authenticated route and `404` on the public one. The SDKs strip credential headers from public calls, even on a client built with an API key.
+`state` is `published` or `unpublished`, and `mode` is `live` or `reviewed`. A `live` room shows its current items. A `reviewed` room pins a revision, and the `pending_changes` field counts the documents that differ from it. The response carries a `slug`. A published room is readable without credentials under `/public/rooms/{slug}`, with item listing, content and, when allowed, download. A room that does not allow downloads answers `403` on the authenticated route and `404` on the public one. The SDKs strip credential headers from public calls, even on a client built with an API key.
 
 ## Limits
 

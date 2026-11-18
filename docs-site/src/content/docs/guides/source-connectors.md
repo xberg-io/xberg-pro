@@ -7,7 +7,9 @@ sidebar:
 
 **Available in:** Pro, Enterprise
 
-Source connectors let a project ingest documents from external systems without keeping credentials in your own application. You create an integration, connect it, and either pull documents on demand or let Xberg synchronize it on a schedule. Credentials are encrypted at rest with AES-256-GCM, access is audited, and read routes return only a masked copy.
+Source connectors ingest documents from cloud drives, object stores and SFTP, so your application never holds the provider credentials.
+
+You create an integration, connect it, and either pull documents on demand or let Xberg synchronize it on a schedule. Credentials are encrypted at rest with AES-256-GCM, access is audited, and read routes return only a masked copy.
 
 ## Supported sources
 
@@ -136,6 +138,14 @@ Tune the scheduler with `PRO_INTEGRATION_SYNC_INTERVAL_SECS` (default 300), `_PO
 Revisions are identified by the provider: the Graph `cTag` (with `eTag` as fallback) for Microsoft sources, the `rev` for Dropbox, and path, size and time for SFTP. A moved file keeps its identity where the provider offers a stable ID. A deletion is reconciled only after a complete scan finishes. Sync resumes from its encrypted cursor after a restart, and an expired provider cursor starts a replacement full scan.
 
 To send synchronized documents straight into a RAG collection, set the target with `PUT /v1/projects/{project_id}/integrations/{iid}/sync/rag-target`; see [RAG](/guides/rag/).
+
+## Limits and errors
+
+- `503` on `/v1/projects/{id}/integrations` means the integration hub is disabled. Set both `INTEGRATION_KEK` and `INTEGRATION_STATE_SECRET`.
+- A `POST /v1/extract` request takes at most 10 documents, inline or by reference.
+- Downloads from Dropbox, OneDrive, SharePoint and SFTP are capped at 100 MiB.
+- An SFTP integration is refused when `host:port` is not an exact entry of `SFTP_HOST_ALLOWLIST`, and its connection fails when the host-key fingerprint differs.
+- Scheduled synchronization is off by default and not supported in replicated Pro deployments.
 
 ## Security
 

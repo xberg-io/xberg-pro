@@ -7,11 +7,13 @@ sidebar:
 
 **Available in:** Enterprise
 
-Enterprise deployments can act as a SAML 2.0 service provider for project-scoped company sign-in. Microsoft Entra ID is the first supported identity provider. A project owner uploads the provider's federation metadata, verifies the company's email domains, and members then sign in with their company account.
+SAML single sign-on lets members of a project sign in with your company's SAML 2.0 identity provider.
+
+Enterprise acts as a SAML 2.0 service provider for project-scoped sign-in. Microsoft Entra ID is the first supported identity provider. A project owner uploads the provider's federation metadata and verifies the company's email domains, and members then sign in with their company account.
 
 ## Configure the service provider
 
-Set `AUTH_ENABLED=true` and give the backend all four SAML values:
+Set `AUTH_ENABLED=true` and give the backend all four SAML values. They are required together: the backend refuses to start when only some are set.
 
 | Variable                  | Meaning                                                              |
 | ------------------------- | -------------------------------------------------------------------- |
@@ -20,7 +22,34 @@ Set `AUTH_ENABLED=true` and give the backend all four SAML values:
 | `SAML_SP_PRIVATE_KEY_PEM` | PEM private key that signs authentication requests                   |
 | `SAML_SP_CERTIFICATE_PEM` | Matching PEM certificate, published in the service-provider metadata |
 
-Set them under `backend.env` in the chart values, with the key from a Secret. Download the service-provider metadata from `GET /auth/saml/metadata`.
+The two public URLs go under `backend.env` in the chart values:
+
+```yaml
+backend:
+  env:
+    AUTH_ENABLED: "true"
+    SAML_SP_ENTITY_ID: "https://app.example.com/auth/saml/metadata"
+    SAML_SP_ACS_URL: "https://app.example.com/auth/saml/acs"
+```
+
+The key and certificate come from a Secret that you create, and go through `backend.extraEnv`:
+
+```yaml
+backend:
+  extraEnv:
+    - name: SAML_SP_PRIVATE_KEY_PEM
+      valueFrom:
+        secretKeyRef:
+          name: xberg-saml-sp
+          key: private-key.pem
+    - name: SAML_SP_CERTIFICATE_PEM
+      valueFrom:
+        secretKeyRef:
+          name: xberg-saml-sp
+          key: certificate.pem
+```
+
+Download the service-provider metadata from `GET /auth/saml/metadata`.
 
 ## Connect Entra ID
 
@@ -46,7 +75,7 @@ Xberg does not fetch metadata URLs; you upload the XML. It is limited to 1 MiB a
 | `jit_enabled`           | Provision members on first sign-in. Off by default; without it, a matching project member or pending invitation must exist |
 | `idp_initiated_enabled` | Accept sign-in started at the identity provider. Off by default                                                            |
 | `enforce_sso`           | Require SSO for the project. Project owners are exempt, as a break-glass path                                              |
-| `attribute_mapping`     | Optional mapping of assertion attributes                                                                                   |
+| `attribute_mapping`     | Optional exact, case-sensitive SAML attribute names: `email_attribute` and `display_name_attribute`                        |
 
 Manage a provider at `/v1/projects/{project_id}/saml/providers/{provider_id}`, its attribute mapping at `.../attribute-mapping`, and send a test sign-in with `POST .../test`, then read the outcome at `.../test/{test_id}`.
 

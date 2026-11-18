@@ -7,7 +7,9 @@ sidebar:
 
 **Available in:** Enterprise
 
-Each project exposes one tenant-isolated SCIM 2.0 endpoint. Your identity provider creates, updates and deactivates project members through it, and group memberships map to custom project roles. Microsoft Entra ID is the validated provider.
+SCIM provisioning creates and removes project members automatically from your identity provider.
+
+Each project exposes one tenant-isolated SCIM 2.0 endpoint. Your identity provider creates, updates and deactivates project members through it, and group memberships map to custom project roles. Microsoft Entra ID is the validated provider. A project owner enables it by creating a connection, as described below.
 
 ## What is supported
 
@@ -24,7 +26,7 @@ curl -X POST "$XBERG_URL/v1/projects/$PROJECT_ID/scim/connections" \
   -d '{ "display_name": "Entra ID" }'
 ```
 
-The response returns the connection, a `client_secret`, the `token_endpoint` and the SCIM `base_url`. The secret is shown once and expires after two years. Copy all of these into the provisioning configuration of an Entra enterprise application, then run **Test Connection**.
+The response returns the connection, a `client_secret`, its `client_secret_expires_at`, the `token_endpoint` and the SCIM `base_url`. The secret is shown once and expires after two years, so rotate it before then. Copy these values into the provisioning configuration of an Entra enterprise application, then run **Test Connection**.
 
 Rotate the credential with `POST /v1/projects/{id}/scim/connections/{connection_id}/rotate`, which replaces the secret and revokes its existing access tokens. Disable the connection with `.../revoke`.
 

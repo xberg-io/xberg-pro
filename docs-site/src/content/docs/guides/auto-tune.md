@@ -7,9 +7,13 @@ sidebar:
 
 **Available in:** Pro, Enterprise. Requires a valid Pro license.
 
-Auto-tune sweeps extraction settings, such as OCR backends and their options, over sample documents you supply with expected output. It scores each candidate configuration, holds back part of the documents to score the winner, and returns a leaderboard. You then promote the best configuration to a named tuning profile.
+Auto-tune finds the best extraction settings for your documents by testing them against ground truth you supply.
 
-A valid license grants the feature. Operators can switch it off with `PRO_AUTO_TUNE_ENABLED=false`, which makes every `/v1/auto-tune` and `/v1/tuning-profiles` request answer `404` with `auto_tune.disabled`.
+It sweeps settings, such as OCR backends and their options, over sample documents with expected output. It scores each candidate configuration and returns a leaderboard. You then promote the best configuration to a named tuning profile.
+
+## Enable auto-tune
+
+A valid license grants the feature, and it is on by default. Operators can switch it off with `PRO_AUTO_TUNE_ENABLED=false`, which makes every `/v1/auto-tune` and `/v1/tuning-profiles` request answer `404` with `auto_tune.disabled`. A run with `structured` ground truth also needs a configured structured-extraction model, and the request is refused up front without one.
 
 ## Check what the deployment can search
 
@@ -40,7 +44,7 @@ curl -X POST "$XBERG_URL/v1/auto-tune" \
   -F "file=@invoice.pdf"
 ```
 
-`ground_truth_kind` is `markdown`, `plaintext` or `structured`. For `structured`, `ground_truth` is a JSON string encoding `{"schema": ..., "expected": ...}`, and both parts are required. Set `routing` to `true` to tune per-document routing in addition to the global configuration. The response carries an `auto_tune_job_id` (a ULID).
+`ground_truth_kind` is `markdown`, `plaintext` or `structured`. For `structured`, `ground_truth` is a JSON string encoding `{"schema": ..., "expected": ...}`, and both parts are required. Set `routing` to `true` to tune per-document routing as well as the global configuration. Routing holds back a share of the documents to validate each route. The response carries an `auto_tune_job_id` (a ULID).
 
 ## Follow the run
 
@@ -65,18 +69,18 @@ curl -X POST "$XBERG_URL/v1/auto-tune/$AUTO_TUNE_JOB_ID/promote" \
 
 The result holds the leaderboard and the winning configuration. Promotion writes a named, reusable tuning profile. Manage profiles with `GET /v1/tuning-profiles`, and `GET` or `DELETE` on `/v1/tuning-profiles/{id}`.
 
-## Limits
+## Limits and errors
 
-These variables cap what one run can consume. Raise them only with the memory and CPU to match.
+These variables cap what one run can consume. A submission above the admission limits, such as the active-run limit, answers `429`. Raise the limits only with the memory and CPU to match. `GET /v1/auto-tune/{id}/result` answers `409` until the run has completed, and also when it failed, so poll the run first.
 
-| Variable                            | Default | Meaning                                                                     |
-| ----------------------------------- | ------- | --------------------------------------------------------------------------- |
-| `PRO_AUTO_TUNE_MAX_CONCURRENCY`     | 2       | Trials evaluated at the same time within one run                            |
-| `PRO_AUTO_TUNE_MAX_TRIALS`          | 64      | Candidate configurations per run; overrides `max_trials` in the config file |
-| `PRO_AUTO_TUNE_MAX_DOCUMENTS`       | 50      | Documents accepted per run                                                  |
-| `PRO_AUTO_TUNE_MAX_ACTIVE_JOBS`     | 3       | Runs active at the same time                                                |
-| `PRO_AUTO_TUNE_MAX_WALL_CLOCK_SECS` | 900     | Wall-clock budget of one run                                                |
-| `PRO_AUTO_TUNE_TOLERANCE`           | 0.01    | Scores within this distance of the best count as a tie                      |
-| `PRO_AUTO_TUNE_HELD_OUT_FRACTION`   | 0.3     | Share of documents held back to score the winner                            |
+| Variable                            | Default | Meaning                                                                         |
+| ----------------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `PRO_AUTO_TUNE_MAX_CONCURRENCY`     | 2       | Trials evaluated at the same time within one run                                |
+| `PRO_AUTO_TUNE_MAX_TRIALS`          | 64      | Candidate configurations per run; overrides `max_trials` in the config file     |
+| `PRO_AUTO_TUNE_MAX_DOCUMENTS`       | 50      | Documents accepted per run                                                      |
+| `PRO_AUTO_TUNE_MAX_ACTIVE_JOBS`     | 3       | Runs active at the same time                                                    |
+| `PRO_AUTO_TUNE_MAX_WALL_CLOCK_SECS` | 900     | Wall-clock budget of one run                                                    |
+| `PRO_AUTO_TUNE_TOLERANCE`           | 0.01    | Scores within this distance of the best count as a tie                          |
+| `PRO_AUTO_TUNE_HELD_OUT_FRACTION`   | 0.3     | With `routing`, the share of documents held out to validate per-document routes |
 
 The search ladder itself, the structured set of settings to explore, lives in the optional TOML file at `XBERG_PRO_CONFIG_FILE`. Environment variables win over the file. See [Pro configuration](/reference/pro-configuration/#auto-tune).

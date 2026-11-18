@@ -7,7 +7,9 @@ sidebar:
 
 **Available in:** Pro, Enterprise. Saved extraction settings on a preset are Enterprise only.
 
-A preset names a prepared extraction setup. Instead of repeating a schema and settings on every request, you reference the preset by ID. Two kinds exist: curated presets that ship with Xberg, and saved presets that you create in a project.
+Presets keep requests short and results consistent by naming a prepared extraction setup that you reference by ID.
+
+Instead of repeating a schema and settings on every request, you send the preset ID. Two kinds exist: curated presets that ship with Xberg, and saved presets that you create in a project. Presets need no setup beyond a project API key, and structured extraction needs a configured model.
 
 ## Curated presets
 
@@ -26,9 +28,11 @@ curl -X POST "$XBERG_URL/v1/extract" \
   -H "Content-Type: application/json" \
   -d '{
     "documents": [{ "filename": "invoice.pdf", "data": "<base64>" }],
-    "options": { "preset": "invoice" }
+    "options": { "preset": "REPLACE_WITH_PRESET_ID" }
   }'
 ```
+
+Take the preset ID from the list. `options.preset` and `options.saved_preset_id` are mutually exclusive.
 
 A curated preset can run structured extraction, which needs a configured model. See [Structured extraction](/concepts/structured-extraction/) and the model settings in [Pro configuration](/reference/pro-configuration/#structured-extraction).
 
@@ -54,9 +58,9 @@ curl -X POST "$XBERG_URL/v1/saved_presets" \
   }'
 ```
 
-`name`, `schema` and `preferred_call_mode` are required. The routes are `GET /v1/saved_presets` (summaries, paginated), `GET`, `PATCH` and `DELETE` on `/v1/saved_presets/{preset_id}`. Reference one from an extraction with `options.saved_preset_id`. It is mutually exclusive with `options.preset`.
+`name`, `schema` and `preferred_call_mode` are required. The name must be unique in the project, 1 to 255 characters. Optional fields are `description`, `system_prompt` and `context_template`. The routes are `GET /v1/saved_presets` (summaries, paginated), and `GET`, `PATCH` and `DELETE` on `/v1/saved_presets/{preset_id}`. Reference a saved preset from an extraction with `options.saved_preset_id`.
 
-Two fields are stored and returned but do not change extraction today. `preferred_call_mode` (`text_only`, `vision_only` or `text_plus_vision`) is validated on write and not applied at extraction time, and `emit_citations` is not applied either. Do not rely on either to change results.
+On Pro, a saved preset contributes its `schema`, `system_prompt` and `context_template` to an extraction. Two fields are stored and returned but do not change extraction. `preferred_call_mode` (`text_only`, `vision_only` or `text_plus_vision`) is validated on write and not applied, and `emit_citations` (default `true`) is not applied either. Results from a saved preset carry no citations. Do not rely on either field to change results.
 
 ## Saved extraction settings (Enterprise)
 

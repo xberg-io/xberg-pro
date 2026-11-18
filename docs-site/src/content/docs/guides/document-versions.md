@@ -7,7 +7,9 @@ sidebar:
 
 **Available in:** Enterprise
 
-Document versions tie successive extractions of the same logical document into one lineage. When you resubmit a changed file under the same `document_id`, Xberg records it as the next version, keeps every earlier extraction, and can compute a diff between any two. Pro has no lineage feature and does not accept caller-supplied document IDs.
+Document versions keep every extraction of a changing file in one lineage, so you can list the versions and diff any two.
+
+When you resubmit a changed file under the same `document_id`, Xberg records it as the next version and keeps every earlier extraction. Pro has no lineage feature and does not accept caller-supplied document IDs. On Enterprise, versioning needs no setup: it starts as soon as you send a `document_id`.
 
 ## Submit a new version
 
@@ -31,7 +33,7 @@ curl "$XBERG_URL/v1/documents/$DOCUMENT_ID/versions?limit=50" \
   -H "Authorization: Bearer $XBERG_API_KEY"
 ```
 
-The response lists every extraction that shares the `document_id`, newest first. Each entry carries that version's job metadata: status, filename, page and byte counts and timestamps. It does not carry the extraction result. `limit` accepts values up to 200, and larger values are clamped. `offset` is clamped to 0-1,000,000.
+The response lists every extraction that shares the `document_id`, newest first. Each entry carries that version's job metadata: status, filename, page and byte counts and timestamps. It does not carry the extraction result. `limit` accepts values up to 200, and larger values are clamped. A negative `limit` answers `422`. `offset` is clamped to 0-1,000,000.
 
 Fetch the latest version, with its result, from `GET /v1/documents/{document_id}`. `GET /v1/documents` lists the project's documents. To read an earlier version's result, take its job ID from the versions list and call `GET /v1/jobs/{id}/result`.
 

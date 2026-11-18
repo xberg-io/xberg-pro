@@ -9,16 +9,16 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 **Available in:** Pro and Enterprise (inline webhooks). Enterprise only (managed webhooks).
 
-Give Xberg a URL and it POSTs the result as soon as a job reaches a terminal status, with no poller and no keep-alive. Polling suits prototypes; webhooks suit production.
+Xberg sends your URL a signed HTTP POST when a job reaches a terminal status, so you do not poll for results.
 
-Both tiers deliver the same body, the same headers and the same retry schedule, so a receiver written against Pro works unchanged on Enterprise. The difference is how you register the URL:
+Both products deliver the same body, the same headers and the same retry schedule, so a receiver written against Pro works unchanged on Enterprise. The difference is how you register the URL:
 
-| Mode | Tier | Registered with |
-|------|------|-----------------|
-| Inline webhook | Pro, Enterprise | A `webhook` object on each request |
-| Managed webhook | Enterprise | A project-level subscription, once, through the API or dashboard |
+| Mode            | Available in    | Registered with                                                  |
+| --------------- | --------------- | ---------------------------------------------------------------- |
+| Inline webhook  | Pro, Enterprise | A `webhook` object on each request                               |
+| Managed webhook | Enterprise      | A project-level subscription, once, through the API or dashboard |
 
-On Pro, webhooks are delivered in-process as fire-and-forget tasks that never block extraction. `PRO_WEBHOOK_MAX_RETRIES` sets the attempt count; the default is 5, and a value outside 1-10 stops the service at start-up. On Enterprise, deliveries are queued in NATS and consumed by a dedicated webhook service, which gives at-least-once delivery across restarts. Every retry adds jitter so jobs that fail together do not retry together.
+On Pro, delivery runs inside the service and never blocks extraction. `PRO_WEBHOOK_MAX_RETRIES` sets the attempt count. The default is 5, and a value outside 1 to 10 stops the service at start-up. On Enterprise, deliveries are queued and survive restarts, which gives at-least-once delivery. Every retry adds jitter, so jobs that fail together do not retry together.
 
 ## Inline webhooks
 
@@ -31,15 +31,17 @@ curl -X POST "$XBERG_URL/v1/extract" \
   -F 'webhook={"url":"https://example.com/hooks/xberg","secret":"REPLACE_WITH_RANDOM_SECRET","metadata":{"request_id":"abc123"}}'
 ```
 
-| Field | Rule |
-|-------|------|
-| `url` | Required. Must be `https://`; an empty URL is refused. Private, loopback and metadata-service destinations are denied |
-| `secret` | Optional HMAC-SHA256 signing secret. Without it, the delivery carries no signature |
-| `metadata` | Optional string map echoed back in the payload. At most 100 entries, keys of 1-255 characters, values up to 1024 characters, 8192 bytes in total |
+| Field      | Rule                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `url`      | Required. Must be `https://` and must not embed credentials. Private, loopback and metadata-service destinations are denied               |
+| `secret`   | Optional HMAC-SHA256 signing secret. Without it, the delivery carries no signature                                                         |
+| `metadata` | Optional string map echoed back in the payload. At most 100 entries, keys of 1-255 characters, values up to 1024 characters, 8192 bytes overall |
+
+A bad `webhook` object fails the request with `400`.
 
 The same `webhook` object works on `POST /v1/auto-tune` and on the asynchronous RAG operations (ingest, reindex and embedding migration). A crawl request receives one `crawl.completed` or `crawl.failed` callback per crawl parent, and an extracting crawl also sends `job.completed` or `job.failed` for each child document.
 
-One case never reaches an inline receiver. If the worker holding a job stops without writing a result and no retry is left, a background reaper fails the job and sends `job.failed` from the job row, which does not carry the inline config. On Enterprise the event goes to the project's managed webhooks. On Pro, poll `GET /v1/jobs/{id}` to catch it.
+One case never reaches an inline receiver. If the worker holding a job stops without writing a result and no retry is left, Xberg fails the job and sends `job.failed` without the inline configuration. On Enterprise the event goes to the project's managed webhooks. On Pro, poll `GET /v1/jobs/{id}` to catch it.
 
 ## Managed webhooks
 
@@ -58,7 +60,7 @@ curl -X POST "$XBERG_URL/v1/projects/$PROJECT_ID/webhooks" \
 
 The response returns the signing `secret` once, including when you supplied it. Store it in your secret manager. Omit `secret` to have the server generate one. Other routes under `/v1/projects/{id}/webhooks/{wh_id}` read, update and delete a subscription, and `POST .../test` sends a synthetic payload (`"event": "test"`) through the same deliverer, with the same signature and headers, so you can verify your handler before you go live.
 
-Supported events are `job.completed`, `job.failed`, `job.cancelled`, `crawl.completed` and `crawl.failed`. The crawl events are available on managed subscriptions only.
+Supported events are `job.completed`, `job.failed`, `job.cancelled`, `crawl.completed` and `crawl.failed`. The crawl events are also sent to inline webhooks on crawl requests, on Pro and Enterprise.
 
 ## Payload
 
@@ -93,7 +95,7 @@ A cancelled job (`DELETE /v1/jobs/{id}`) sends `job.cancelled` with neither `res
 - `timestamp` is RFC 3339 in UTC, the moment the job reached its terminal status.
 - `error.code` is one of `EXTRACTION_ERROR`, `FETCH_ERROR`, `INVALID_CONFIG`, `STRUCTURED_EXTRACTION_ERROR`, `STORAGE_ERROR` or `INTERNAL_ERROR`. Pro reports the specific cause. Enterprise reports `EXTRACTION_ERROR` when the engine rejected the document and `INTERNAL_ERROR` for everything else, so treat any other value as a generic failure.
 - `metadata` appears only for inline webhooks that supplied it.
-- `results` is the same document `GET /v1/jobs/{id}` returns as `result`. It is present on `job.completed` when it fits in 100 KiB; otherwise fetch it from the job endpoint.
+- `results` is one extracted document, in the same shape as an entry of `results` in `GET /v1/jobs/{id}/result`. It is present on `job.completed` when it fits in 100 KiB. Otherwise fetch the result from `GET /v1/jobs/{id}/result`.
 
 Deliveries carry these headers:
 
@@ -140,7 +142,7 @@ async def receive(request: Request,
     expected = hmac.new(SECRET, signed, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(parts.get("v1", ""), expected):
         raise HTTPException(401, "bad signature")
-    # fetch GET /v1/jobs/{job_id} and process
+    # fetch GET /v1/jobs/{job_id}/result and process
     return {"ok": True}
 ```
 
@@ -176,7 +178,7 @@ app.post("/webhooks/xberg", express.raw({ type: "application/json" }),
         !crypto.timingSafeEqual(given, Buffer.from(expected, "hex"))) {
       return res.status(401).end();
     }
-    // fetch GET /v1/jobs/{job_id} and process
+    // fetch GET /v1/jobs/{job_id}/result and process
     res.json({ ok: true });
   });
 ```
@@ -228,7 +230,7 @@ func receive(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "bad signature", http.StatusUnauthorized)
         return
     }
-    // fetch GET /v1/jobs/{job_id} and process
+    // fetch GET /v1/jobs/{job_id}/result and process
     w.WriteHeader(http.StatusOK)
 }
 ```
@@ -240,12 +242,12 @@ func receive(w http.ResponseWriter, r *http.Request) {
 
 Delivery is at least once, on the same schedule for both tiers. If your endpoint returns a non-2xx status or times out:
 
-- Xberg makes up to 5 attempts in total.
+- Xberg makes up to 5 attempts by default. On Pro, `PRO_WEBHOOK_MAX_RETRIES` changes the count.
 - Backoff runs 5 seconds, 30 seconds, 5 minutes, 5 minutes, about 10 minutes in all, and then the delivery is abandoned.
 - A `4xx` other than `429` is permanent, so retries stop.
 - `429`, `5xx` and connection errors retry until the cap.
 
-Deduplicate on `event_id`. The same event can arrive more than once if your endpoint responds slowly. See [Webhook errors](/reference/webhook-errors/) for delivery failure codes.
+Deduplicate on `event_id`. The same event can arrive more than once if your endpoint responds slowly. On Pro, `GET /v1/jobs/{id}` reports the delivery state of an inline webhook in `webhook_delivery` (`pending`, `delivered` or `failed`, with `attempt_count`). See [Webhook errors](/reference/webhook-errors/) for delivery failure codes.
 
 ## Auto-tune events
 
@@ -257,7 +259,7 @@ Enterprise records each managed delivery attempt before it sends the HTTP reques
 
 Lists include event IDs, attempt numbers, timestamps, HTTP status and duration. A missing `completed_at` means the sender has not recorded an outcome; it does not prove the endpoint received nothing. A single attempt adds request and response previews of at most 4096 UTF-8 bytes each, with truncation flags. Previews can contain your document data, but they never include authentication or signature headers.
 
-History and the retained event payload become eligible for deletion after seven days. Cleanup runs every six hours while the webhook service is running. Deleting a subscription deletes its history. Inline callbacks and test requests are not part of the history.
+History and the retained event payload become eligible for cleanup after seven days. Deleting a subscription deletes its history. Inline callbacks and test requests are not part of the history.
 
 Project owners can queue a retained, completed attempt again:
 

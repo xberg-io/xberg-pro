@@ -1,44 +1,69 @@
 ---
 title: Quickstart
-description: Submit a document to Xberg Pro, poll for the job, and read the extracted text with curl, Python, TypeScript or Go.
+description: Submit a document to Xberg Pro, wait for the job, and read the extracted text with curl, Python, TypeScript or Go.
 sidebar:
   order: 5
 ---
 
-import { Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+import { Tabs, TabItem, Aside, Steps } from "@astrojs/starlight/components";
 
-Extraction is asynchronous. `POST /v1/extract` returns `202` with one or more job IDs, and the text is available after a worker finishes. Poll `GET /v1/jobs/{id}`, or let Xberg call you with a [webhook](/guides/webhooks/).
+Extraction is asynchronous. `POST /v1/extract` returns `202` with a job ID, a worker extracts the document, and you read the text from the job's result endpoint once the job finishes. Instead of polling, you can let Xberg call you with a [webhook](/guides/webhooks/).
 
-You need a running instance ([Docker](/start/pro-docker/), [Pro on Helm](/start/pro-helm/) or [Enterprise](/start/enterprise-helm/)), its base URL and a project API key. Pro and Enterprise serve the same extraction routes, so moving between them changes the base URL and key, not the code.
+You need:
+
+- A running instance: [Docker](/start/pro-docker/), [Pro on Helm](/start/pro-helm/) or [Enterprise](/start/enterprise-helm/). Both products serve the same extraction routes, so moving between them changes the base URL and key, not the code.
+- The base URL of the instance, for example `http://localhost:8080` for a local Docker install.
+- A project API key. The install guides end with creating one.
+- `curl` and `jq` for the curl flow, and a PDF named `invoice.pdf` in the working directory.
 
 ## Extract one file
 
-Set the base URL and key, then submit a file:
+<Steps>
+
+1. Set the base URL and key:
+
+   ```bash
+   export XBERG_URL=http://localhost:8080
+   export XBERG_API_KEY=REPLACE_WITH_PROJECT_API_KEY
+   ```
+
+2. Submit the file. The response is `202` with `{ "job_ids": ["<uuid>"], "status": "pending" }`:
+
+   ```bash
+   JOB=$(curl -sX POST "$XBERG_URL/v1/extract" \
+     -H "Authorization: Bearer $XBERG_API_KEY" \
+     -F "file=@invoice.pdf" | jq -r '.job_ids[0]')
+   echo "$JOB"
+   ```
+
+3. Poll the job until it reaches a terminal status:
+
+   ```bash
+   while true; do
+     STATUS=$(curl -s "$XBERG_URL/v1/jobs/$JOB" \
+       -H "Authorization: Bearer $XBERG_API_KEY" | jq -r .status)
+     case "$STATUS" in completed|partial_success|failed|cancelled) break ;; esac
+     sleep 1
+   done
+   echo "$STATUS"
+   ```
+
+4. Read the result. `GET /v1/jobs/{id}/result` returns the extracted documents once the job is `completed` or `partial_success`, and `409` before that:
+
+   ```bash
+   curl -s "$XBERG_URL/v1/jobs/$JOB/result" \
+     -H "Authorization: Bearer $XBERG_API_KEY" | jq -r '.results[0].content'
+   ```
+
+</Steps>
+
+The last command prints the extracted text of the document. If the status was `failed`, the result endpoint answers `409`. Read the reason from `GET /v1/jobs/$JOB`, whose `error` field carries it.
+
+## Use an SDK
+
+The SDKs submit the file, poll with back-off and raise an error when the job fails or is cancelled. `extract_and_wait` returns the job record, which holds status and statistics but not the extracted text. Fetch the text with `get_job_result` (`getJobResult` in TypeScript, `GetJobResult` in Go).
 
 <Tabs syncKey="lang">
-<TabItem label="curl">
-
-```bash title="curl"
-export XBERG_URL=http://localhost:8080
-export XBERG_API_KEY=kz_your_key_here
-
-# /v1/extract answers 202 with { "job_ids": [...], "status": "pending" }.
-JOB=$(curl -sX POST "$XBERG_URL/v1/extract" \
-  -H "Authorization: Bearer $XBERG_API_KEY" \
-  -F "file=@invoice.pdf" | jq -r '.job_ids[0]')
-
-# Poll until the job reaches a terminal status, then print the text.
-while true; do
-  STATUS=$(curl -s "$XBERG_URL/v1/jobs/$JOB" \
-    -H "Authorization: Bearer $XBERG_API_KEY" | jq -r .status)
-  case "$STATUS" in completed|partial_success|failed|cancelled) break ;; esac
-  sleep 1
-done
-curl -s "$XBERG_URL/v1/jobs/$JOB" \
-  -H "Authorization: Bearer $XBERG_API_KEY" | jq -r .result.content
-```
-
-</TabItem>
 <TabItem label="Python">
 
 ```python title="Python"
@@ -53,7 +78,8 @@ async def main() -> None:
         api_key=os.environ["XBERG_API_KEY"],
     ) as client:
         job = await client.extract_and_wait(file=Path("invoice.pdf"))
-        print(job.result.content)
+        result = await client.get_job_result(str(job.id))
+        print(result.results[0].content)
 
 asyncio.run(main())
 ```
@@ -73,7 +99,8 @@ const data = await readFile("invoice.pdf");
 const job = await client.extractAndWait({
   file: { name: "invoice.pdf", data, mimeType: "application/pdf" },
 });
-console.log(job.result?.content);
+const result = await client.getJobResult(job.id);
+console.log(result.results?.[0]?.content);
 ```
 
 </TabItem>
@@ -113,33 +140,55 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Println(job.Result.Content)
+    result, err := client.GetJobResult(ctx, job.Id.String())
+    if err != nil {
+        log.Fatal(err)
+    }
+    if result.Results != nil && len(*result.Results) > 0 {
+        fmt.Println((*result.Results)[0].Content)
+    }
 }
 ```
 
 </TabItem>
 </Tabs>
 
-A single request accepts up to 10 documents inline, so submit several files in one call by repeating the `file` part (curl: `-F "file=@a.pdf" -F "file=@b.pdf"`). The response lists one job ID per file. For larger batches, use presigned uploads (`POST /v1/uploads/presign`, then `POST /v1/uploads/confirm`), which stage up to 100 documents.
+The Python SDK also offers a blocking `XbergClient` with the same method names. Install and configure the clients in [SDKs](/start/sdks/).
+
+## Submit several files
+
+A single request accepts up to 10 documents inline. Repeat the `file` part to submit several files in one call (curl: `-F "file=@a.pdf" -F "file=@b.pdf"`). The response lists one job ID per file under `job_ids`. For larger batches, use presigned uploads (`POST /v1/uploads/presign`, then `POST /v1/uploads/confirm`), which stage up to 100 documents.
 
 ## Job statuses
 
-`GET /v1/jobs/{id}` returns one of seven `status` values. Treat `completed`, `partial_success`, `failed` and `cancelled` as terminal. Anything else means poll again.
+`GET /v1/jobs/{id}` returns one of these `status` values for an extraction job. Treat `completed`, `partial_success`, `failed` and `cancelled` as terminal. Any other status means poll again.
 
-| `status` | Meaning | `result` present |
-|----------|---------|------------------|
-| `awaiting_upload` | Job created, document upload not yet finalized | No |
-| `pending` | Queued, not yet picked up | No |
-| `processing` | A worker is extracting | No |
-| `completed` | Done; the full result is available | Yes |
-| `partial_success` | Some pages or files failed; a partial result is available | Yes |
-| `failed` | Unrecoverable error; `error` carries the reason | No |
-| `cancelled` | Job cancelled by the project | No |
+| `status`          | Meaning                                                                   |
+| ----------------- | ------------------------------------------------------------------------- |
+| `pending`         | Queued, not yet picked up                                                 |
+| `processing`      | A worker is extracting                                                    |
+| `completed`       | Done. The full result is available at `/v1/jobs/{id}/result`              |
+| `partial_success` | Some pages or files failed. A partial result is available at the same URL |
+| `failed`          | Unrecoverable error. The job's `error` field carries the reason           |
+| `cancelled`       | The project cancelled the job                                             |
 
-The Python and TypeScript SDKs poll once per second, back off by a factor of two up to 30 seconds, and give up after five minutes. Tune this with `poll_interval` and `timeout` (`pollInterval` in TypeScript). Do not poll faster than once per second; rate limits apply.
+Enterprise adds `awaiting_upload`, for a job whose document upload is not yet finalized. A crawl job, which `GET /v1/jobs/{id}` also returns, adds `crawling` and `extracting` between `pending` and the terminal statuses. See [Crawling](/guides/crawling/).
+
+The SDKs poll once per second, double the interval after each poll up to 30 seconds, and give up after five minutes. Tune this with `poll_interval` and `timeout` in Python (seconds), `pollIntervalMs` and `timeoutMs` in TypeScript, and the `Wait` field of `ExtractAndWaitOptions` in Go (`WaitOptions{Timeout, PollInterval, Backoff}`). Do not poll faster than once per second, because rate limits apply.
+
+## Errors
+
+| Status | Meaning                                                                                                                  |
+| ------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `401`  | The key is missing, wrong or expired                                                                                     |
+| `403`  | The key has the `read` scope and cannot submit work                                                                      |
+| `409`  | `GET /v1/jobs/{id}/result` on a job that has not completed successfully                                                  |
+| `410`  | The stored result has expired                                                                                            |
+| `413`  | A document exceeds the upload limit                                                                                      |
+| `429`  | The rate limit or, on Pro, the project's monthly job or page quota is exhausted. `Retry-After` gives the seconds to wait |
 
 <Aside>
-Fetch the full result of a finished job from `GET /v1/jobs/{id}/result`. Use `GET /v1/jobs` to list recent jobs and crawl parents for the project.
+Use `GET /v1/jobs` to list recent jobs and crawl parents for the project, and `DELETE /v1/jobs/{id}` to cancel a job that has not finished.
 </Aside>
 
 ## Where to next
@@ -148,4 +197,4 @@ Fetch the full result of a finished job from `GET /v1/jobs/{id}/result`. Use `GE
 - Choose output and OCR settings with [presets](/guides/presets/).
 - Ingest into a searchable collection with [RAG](/guides/rag/).
 - Pull documents from storage and drives with [source connectors](/guides/source-connectors/).
-- Install and configure the clients in [SDKs](/start/sdks/); the full client API is at [docs.sdks.xberg.io](https://docs.sdks.xberg.io).
+- Install and configure the clients in [SDKs](/start/sdks/). The full client API is at [docs.sdks.xberg.io](https://docs.sdks.xberg.io).

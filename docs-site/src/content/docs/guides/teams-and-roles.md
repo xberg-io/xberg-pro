@@ -7,16 +7,18 @@ sidebar:
 
 **Available in:** Enterprise
 
-Enterprise projects have members. Each member holds a base role, Owner or Member, and can additionally hold custom roles that grant specific permissions. Custom roles are also what [SCIM group mappings](/guides/scim/) and role-bound API keys point at.
+Teams and roles control who can do what in an Enterprise project.
 
-These routes belong to the backend control plane. Call them with a session token for a signed-in project member, or use the dashboard Team page.
+Each member holds a base role, Owner or Member, and can also hold custom roles that grant specific permissions. Custom roles are also what [SCIM group mappings](/guides/scim/) and role-bound API keys point at.
+
+These routes belong to the backend control plane. Call them with a session token for a signed-in project member, or use the dashboard Team page. Enable the dashboard with `frontend.enabled=true` in the chart values.
 
 ## Base roles
 
-| Role     | Meaning                                                                                                                                     |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OWNER`  | Full control of the project, including members, roles, SSO, SCIM and deletion. Owners are exempt from SSO enforcement as a break-glass path |
-| `MEMBER` | Works in the project within the permissions of their custom roles                                                                           |
+| Role     | Meaning                                                                                                                                        |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OWNER`  | Full control of the project, including members, roles, SSO, SCIM and deletion. SSO enforcement does not apply to owners, as a break-glass path |
+| `MEMBER` | Works in the project within the permissions of their custom roles                                                                              |
 
 ## Invite and manage members
 
@@ -55,14 +57,19 @@ curl -X POST "$XBERG_URL/v1/projects/$PROJECT_ID/roles" \
 
 Read, update and delete roles at `/v1/projects/{id}/roles` and `/v1/projects/{id}/roles/{role_id}`. Permissions are fixed identifiers. They include:
 
-| Area                | Permissions                                                                                                                              |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Project             | `project.read`, `project.update`, `project.delete`                                                                                       |
-| Extraction and jobs | `extraction.execute`, `extraction.read`, `job.read`, `job.cancel`, `document.read`                                                       |
-| RAG and tuning      | `rag.read`, `rag.update`, `preset.read`, `preset.manage`, `auto_tune.read`, `auto_tune.manage`                                           |
-| Members and roles   | `member.read`, `member.update`, `member.remove`, `member.leave`, `role.read`, `role.create`, `role.update`, `role.delete`, `role.assign` |
-| Invitations         | `invitation.read`, `invitation.create`, `invitation.revoke`                                                                              |
-| API keys            | `api_key.read`, `api_key.create`, and the further key permissions in the API reference                                                   |
+| Area                | Permissions                                                                                                                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project             | `project.read`, `project.update`, `project.delete`                                                                                                                                                                     |
+| Extraction and jobs | `extraction.execute`, `extraction.read`, `job.read`, `job.cancel`, `document.read`                                                                                                                                     |
+| RAG and tuning      | `rag.read`, `rag.update`, `preset.read`, `preset.manage`, `auto_tune.read`, `auto_tune.manage`                                                                                                                         |
+| Members and roles   | `member.read`, `member.update`, `member.remove`, `member.leave`, `role.read`, `role.create`, `role.update`, `role.delete`, `role.assign`                                                                               |
+| Invitations         | `invitation.read`, `invitation.create`, `invitation.revoke`                                                                                                                                                            |
+| API keys            | `api_key.read`, `api_key.create`, `api_key.regenerate`, `api_key.revoke`                                                                                                                                               |
+| Integrations        | `integration.read`, `integration.create`, `integration.delete`, `integration.connect`, `integration.disconnect`, `integration_document.read`                                                                           |
+| Webhooks            | `webhook.read`, `webhook.create`, `webhook.update`, `webhook.delete`, `webhook.test`, `webhook_delivery.read`, `webhook_delivery.retry`                                                                                |
+| Identity            | `scim.read`, `scim.manage`, `audit.read`                                                                                                                                                                               |
+| Usage               | `usage.read`, `analytics.read`, `sandbox.execute`                                                                                                                                                                      |
+| Data rooms          | `data_room.read`, `data_room.create`, `data_room.update`, `data_room.delete`, `data_room.manage`, `data_room.item.write`, `data_room.member.manage`, `data_room.transfer`, `data_room.publish`, `data_room.audit.read` |
 
 A member's effective permissions are the union of all their roles. The full list is in the backend OpenAPI specification under `ProjectPermission`; see the [API reference](/reference/api/).
 

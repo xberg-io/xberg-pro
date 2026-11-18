@@ -7,7 +7,9 @@ sidebar:
 
 **Available in:** Pro, Enterprise
 
-Enrichment analyzes text you supply and returns entities, keywords, classifications and captions. It is separate from extraction: you send text, not a document, and receive a result by polling a job. It runs in-process on Pro and does not need NATS.
+Enrichment adds entities, keywords, classification labels and image captions to text you already have.
+
+It is separate from extraction: you send text, not a document, and poll a job for the result. Keyword and entity extraction need no setup beyond a project API key. Classification and captioning call a language or vision model that you name in each request; see [Pro configuration](/reference/pro-configuration/#structured-extraction) for the provider credentials a deployment can supply.
 
 ## Submit text
 
@@ -36,7 +38,33 @@ The response is `{ "job_id": "<ULID>" }`. Unknown option keys are refused, so a 
 | `captioning`           | Vision-model captions for images you supply                                                                                                                              |
 | `labels`               | Candidate labels. Pro refuses non-empty values with `rag.label_classification.unsupported`, because it ships no classifier for this option; use `classification` instead |
 
-`classification`, `chunk_classification` and `captioning` run on Pro. Enterprise refuses them. The vision and language models behind them are the ones you configure; see [Pro configuration](/reference/pro-configuration/#structured-extraction).
+`classification`, `chunk_classification` and `captioning` run on Pro, and Enterprise refuses them with `400`. Enterprise runs `keywords`, `entities` and `labels`. Unknown option keys are refused on both.
+
+Each model-backed option names its model in an `llm` object. `llm.model` is required and uses the `provider/model` form, for example `openai/gpt-4o-mini`. Optional keys are `api_key`, `base_url`, `max_tokens`, `temperature`, `timeout_secs` and `max_retries`. When `api_key` is omitted, the deployment's own provider credentials apply, unless you set `base_url`. A request that sets `base_url` never falls back to them.
+
+| Option                 | Required keys                                                        |
+| ---------------------- | -------------------------------------------------------------------- |
+| `classification`       | `labels` (at least one), `llm`. Optional `multi_label`               |
+| `chunk_classification` | `chunks`, `definitions` (at least one `{label, description}`), `llm` |
+| `captioning`           | `images` (base64-encoded bytes), `llm`                               |
+
+A `400` reports empty or oversized `labels`, `chunks`, `definitions` or `images`, an endpoint that the egress policy refuses, or a model the deployment cannot authenticate. For example, a classification request:
+
+```bash
+curl -X POST "$XBERG_URL/v1/enrich" \
+  -H "Authorization: Bearer $XBERG_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "The invoice is overdue and the customer is asking for a refund.",
+    "options": {
+      "classification": {
+        "labels": ["billing", "support", "sales"],
+        "multi_label": true,
+        "llm": { "model": "openai/gpt-4o-mini" }
+      }
+    }
+  }'
+```
 
 ## Poll for the result
 

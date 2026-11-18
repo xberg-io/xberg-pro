@@ -7,7 +7,11 @@ sidebar:
 
 **Available in:** Pro, Enterprise. Requires a valid Pro license.
 
-RAG collections store chunked, embedded documents in your PostgreSQL database with pgvector, and retrieve the most relevant chunks for a query. A valid license grants the feature; operators can switch it off with `PRO_RAG_ENABLED=false`, which makes every `/v1/rag/*` request answer `404` with `rag.disabled`. Deployments that set `XBERG_DATA_POLICY=extraction_only` deny RAG reads and writes.
+RAG collections store chunked, embedded documents in your PostgreSQL database with pgvector, and return the most relevant chunks for a query.
+
+## Enable RAG
+
+A valid license grants the feature, and it is on by default. Operators can switch it off with `PRO_RAG_ENABLED=false`, which makes every `/v1/rag/*` request answer `404` with `rag.disabled`. Deployments that set `XBERG_DATA_POLICY=extraction_only` deny RAG reads and writes. The first request that needs an embedding model downloads it; see [Runtime and memory](#runtime-and-memory).
 
 ## Create a collection
 
@@ -26,7 +30,7 @@ New collections use the index method set by `XBERG_VECTORSTORE_DEFAULT_INDEX_MET
 
 ## Ingest documents
 
-Each call submits one document with a flat body and returns `202` with a `job_id` and a `document_id`:
+Each call submits one document with a flat body and returns `202` with a `job_id` and a `document_id`. `kind` is `text`, with the content in `text`, or `chunks`, with pre-split chunks in `chunks`. Optional fields are `title`, `metadata` and `mime`:
 
 ```bash
 curl -X POST "$XBERG_URL/v1/rag/collections/policies/documents" \
@@ -75,4 +79,12 @@ To change a collection's embedding model without downtime, start a dual-write mi
 
 ## Runtime and memory
 
-Pro runs ingest, reindex and migration in-process, bounded by `PRO_RAG_MAX_CONCURRENCY` (default 2). It keeps up to two embedding and two reranker engines resident. Set `XBERG_EMBEDDING_ENGINE_CACHE_MAX_RESIDENT` and `XBERG_RERANKER_ENGINE_CACHE_MAX_RESIDENT` at least as high as the number of collection presets used at the same time, or alternating requests rebuild evicted engines. Models download from Hugging Face on first use into `HF_HOME`; see [RAG configuration](/operate/rag-config/) and [Air-gapped installation](/operate/air-gapped/) for pre-seeding. Error codes are in [RAG errors](/reference/rag-errors/).
+Pro runs ingest, reindex and migration in-process, bounded by `PRO_RAG_MAX_CONCURRENCY` (default 2). It keeps up to two embedding and two reranker engines resident. Set `XBERG_EMBEDDING_ENGINE_CACHE_MAX_RESIDENT` and `XBERG_RERANKER_ENGINE_CACHE_MAX_RESIDENT` at least as high as the number of collection presets used at the same time, or alternating requests rebuild evicted engines. Models download from Hugging Face on first use into `HF_HOME`; see [RAG configuration](/operate/rag-config/) and [Air-gapped installation](/operate/air-gapped/) for pre-seeding.
+
+## Limits and errors
+
+- `embedding_dim` is 1 to 2000, `top_k` is 1 to 200 and `candidate_multiplier` is 1 to 20.
+- Retrieval answers `501` when the collection's reranker is unavailable, and `503` when the per-project retrieve limiter is unavailable.
+- Every `/v1/rag/*` request answers `404` with `rag.disabled` while an operator has switched RAG off.
+
+The full list of error codes is in [RAG errors](/reference/rag-errors/).

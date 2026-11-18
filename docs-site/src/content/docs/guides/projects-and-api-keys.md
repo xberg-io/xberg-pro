@@ -7,7 +7,9 @@ sidebar:
 
 **Available in:** Pro, Enterprise. Key regeneration, role-bound keys and project extraction defaults are Enterprise only.
 
-A project is the unit of isolation. Jobs, documents, collections, presets, webhooks, integrations and audit entries belong to one project, and PostgreSQL row-level security enforces the boundary. An API key belongs to one project and cannot read or write another.
+Projects isolate work from each other, and API keys give your services scoped access to one project.
+
+Jobs, documents, collections, presets, webhooks, integrations and audit entries belong to one project, and PostgreSQL row-level security enforces the boundary. An API key belongs to one project and cannot read or write another. On Pro, the admin key creates the first project and key; see [Install with Docker](/start/pro-docker/#6-create-a-project-and-an-api-key).
 
 ## Credentials
 
@@ -21,7 +23,7 @@ Send keys as `Authorization: Bearer <key>`. Keys carry the prefix `kz_` and are 
 
 ## Create a project
 
-On Pro, the admin key or a signed-in owner creates a project with a name and a URL-safe slug. Optional quota overrides are `max_file_size_mb` and `max_monthly_jobs`:
+On Pro, the admin key or a signed-in owner creates a project with a name and a URL-safe slug. Optional quota overrides are `max_file_size_mb`, `max_monthly_jobs` and `max_monthly_pages`:
 
 ```bash
 curl -X POST "$XBERG_URL/v1/projects" \
@@ -60,4 +62,6 @@ On Enterprise, the backend serves the same routes under `/v1/projects/{id}/api-k
 
 ## Limits and usage
 
-`GET /v1/usage` returns aggregate extraction usage for the authenticated project between inclusive start and exclusive end dates, and defaults to the current month. Per-project quotas on Pro are the `max_file_size_mb` and `max_monthly_jobs` overrides. Administrative actions are recorded in the [audit log](/guides/audit-log/).
+`GET /v1/usage` returns aggregate extraction usage for the authenticated project between an inclusive `start` and an exclusive `end` date, and defaults to the current month. The response includes `quota_limit` and `quota_remaining` for the monthly page quota. Both are `null` when no quota is set.
+
+On Pro, a project's monthly job and page quotas are unlimited unless you set `max_monthly_jobs` or `max_monthly_pages`. Once a quota is exhausted, `POST /v1/extract` answers `429` with the code `quota_exceeded` and a `Retry-After` header that gives the seconds until the next UTC calendar month. `max_file_size_mb` caps the size of one uploaded file. Administrative actions are recorded in the [audit log](/guides/audit-log/).

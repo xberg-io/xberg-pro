@@ -7,7 +7,9 @@ sidebar:
 
 **Available in:** Pro, Enterprise
 
-The audit log records security-relevant and administrative actions in a project, each under a named action such as `job.submit`. Entries are written in the same database that holds the project, and a failed audit write is counted in the `audit_write_failures_total{action}` metric instead of being dropped silently.
+The audit log records who did what in a project, so you can review security-relevant and administrative actions.
+
+Each entry has a named action such as `job.submit`. Entries are written in the same database that holds the project. The log needs no setup. A failed audit write is counted in the `audit_write_failures_total{action}` metric instead of being dropped silently, so alert on that metric.
 
 ## Read the log
 
@@ -21,9 +23,11 @@ curl "$XBERG_URL/v1/audit?action=job.submit&limit=50&offset=0" \
 | Parameter             | Rule                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | `action`              | Optional. Matches a known audit action exactly, for example `job.submit`. Unknown actions answer `400` |
-| `limit`               | 1-100, default 50                                                                                      |
-| `offset`              | 0-1,000,000, default 0                                                                                 |
+| `limit`               | 1-100, default 50. Values outside the range are rejected                                               |
+| `offset`              | 0-1,000,000, default 0. Values outside the range are rejected                                          |
 | `X-Project-ID` header | Selects a project for a signed-in member. A project API key cannot select another project              |
+
+A caller that is neither an admin nor the project owner gets `403`. An unknown `action` or an out-of-range page value gets `400`.
 
 On Enterprise, the dashboard backend serves the same data to project members at `GET /v1/projects/{id}/audit`.
 
