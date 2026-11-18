@@ -15,7 +15,7 @@ Back up the first three components. The fourth is disposable and applies to Ente
 
 | Component                   | Holds                                                                                                                                      | Loss impact                                                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| PostgreSQL                  | Projects, API keys, jobs, usage events, audit log, RAG collections and vectors (and on Enterprise, members)                                | Total. The deployment cannot start without it.                                                                  |
+| PostgreSQL                  | Projects, API keys, jobs, audit log, RAG collections and vectors (and on Enterprise, members)                                              | Total. The deployment cannot start without it.                                                                  |
 | Object store                | Extracted document bytes and cached embeddings                                                                                             | Results become unreadable. Metadata in PostgreSQL still points at the missing objects.                          |
 | Secrets                     | Database URLs, signing keys, storage credentials, provider API keys, and on Pro the license token, `XBERG_ADMIN_KEY` and `INTEGRATION_KEK` | Services cannot start. Existing tokens stop validating, and stored integration credentials cannot be decrypted. |
 | NATS JetStream (Enterprise) | Queued and in-flight jobs                                                                                                                  | Queued jobs are lost and clients resubmit them. Do not back up JetStream.                                       |
@@ -202,4 +202,4 @@ Your recovery point comes from the backup method, not from the schedule alone.
 | WAL archiving with a weekly base backup | Seconds                | Base restore plus WAL replay from the base backup.       |
 | Managed provider continuous backup      | Seconds                | Provider-defined. Usually faster than a logical restore. |
 
-Choose WAL archiving or a managed equivalent when losing a day of usage records is unacceptable. Usage events cannot be recomputed from the object store.
+Choose WAL archiving or a managed equivalent when losing a day of data is unacceptable.

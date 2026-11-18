@@ -9,11 +9,25 @@ sidebar:
 
 ## When you need it
 
-A default install runs one Pro pod and upgrades with `helm upgrade`. You need the deployment operator only when you run a **replicated** deployment: `deployment.mode=replicated` with two or more pods spread over distinct nodes, shared object storage, and rollouts that replace the whole fleet with a new generation behind one stable Service. Replicated releases are not upgraded with `helm upgrade`. Each generation is a separate Helm release, and the operator moves traffic between them.
+A default install runs one Pro pod and upgrades with `helm upgrade`. You need the deployment operator only for a **replicated** deployment: `deployment.mode=replicated`, with two or more pods on distinct nodes and shared object storage.
 
-The operator is a set of Python commands that ship in the chart archive. They qualify a generation before it takes traffic, switch the Service to it and retire the old generation. It is proprietary software under the archive's `LICENSE`, and it installs no tools and creates no cloud resources.
+A replicated release is not upgraded with `helm upgrade`. Each rollout installs the whole fleet again as a new Helm release, and the operator moves traffic to it behind one stable Service.
+
+The operator is a set of Python commands that ship in the chart archive. It is proprietary software under the archive's `LICENSE`, and it installs no tools and creates no cloud resources.
 
 Use it when you need planned rollouts with no HTTP errors. For everything else, use the [Pro Helm install](/start/pro-helm/) or the [Enterprise Helm install](/start/enterprise-helm/).
+
+## Terms
+
+| Term       | Meaning                                                                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generation | One Helm release of the whole fleet. A rollout installs a new generation and retires the old one.                                            |
+| Cohort     | The components of one generation (API, worker, optional webhooks) that are checked and switched together.                                    |
+| Qualify    | The operator's checks before a generation takes traffic, including a proof that all pods share the same object storage.                      |
+| Receipt    | A stored record of a completed step, such as a schema migration or a published component.                                                    |
+| Lease      | A time-limited claim that a running command holds on its operation. If the command dies, recovery is possible only after the lease expires.  |
+| Epoch      | The installation's current state counter. Passing it as `--expected-epoch` makes the operator refuse a command that works from a stale view. |
+| Fence      | A marker that keeps the workload stopped until maintenance finishes.                                                                         |
 
 ## Prerequisites
 
@@ -56,14 +70,14 @@ python3 scripts/deployment_lifecycle_argo_enterprise_initial.py --help
 
 Put a load balancer or ingress that you manage in front of the operator-owned installation Service. Keep the per-generation ingress disabled. The chart bundles no proxy, and Kubernetes Service balancing alone does not meet this requirement.
 
-During a rollout the operator moves the Service to the new generation, waits 30 seconds, then drains the old one. Your load balancer must stop sending requests to the old pods inside that window. Configure and test all of the following, then set `deployment.traffic.connectionDrainingConfirmed=true`:
+During a rollout the operator moves the Service to the new generation, waits 30 seconds, then drains the old one. Your load balancer must stop sending requests to the old pods inside that window.
 
-- Client connections stay open while the load balancer picks upstream pods independently.
-- Upstream connections are retired within a hard maximum age well below 30 seconds (for example 20), or not reused. An idle timeout alone does not do this. Retiring a connection must not cancel requests already in flight.
-- New upstream connections follow the Service's current endpoints. A proxy pinned to the Service ClusterIP may never see pods leave.
-- The time from the new pods becoming ready until the last request reaches the old pods, plus the time that request needs to upload, validate and be accepted, stays under 30 seconds with margin. Uploads that can run longer than that are outside the zero-error guarantee.
-
-The chart only checks the boolean. It does not inspect your load balancer. Before you set it, test with long-lived clients through a three-step sequence (A to B to C), with a slow POST in flight during one switch, and no client or proxy retries. Confirm that the POST creates exactly one job and returns its result. A passing readiness probe is not this test.
+1. Keep client connections open while the load balancer picks upstream pods independently.
+2. Retire upstream connections within a hard maximum age well below 30 seconds (for example 20), or do not reuse them. An idle timeout alone does not do this. Retiring a connection must not cancel requests already in flight.
+3. Make new upstream connections follow the Service's current endpoints. A proxy pinned to the Service ClusterIP may never see pods leave.
+4. Keep the time from the new pods becoming ready until the last request reaches the old pods, plus the time that request needs to upload, validate and be accepted, under 30 seconds with margin. Uploads that can run longer are outside the zero-error guarantee.
+5. Test it. Use long-lived clients through a three-step sequence (A to B to C), with a slow POST in flight during one switch, and no client or proxy retries. Confirm that the POST creates exactly one job and returns its result. A passing readiness probe is not this test.
+6. Set `deployment.traffic.connectionDrainingConfirmed=true`. The chart only checks this boolean and does not inspect your load balancer.
 
 A sudden pod or node loss can still drop in-flight connections. Accepted jobs recover on their own, but never resubmit an uncertain POST automatically. Database and Enterprise NATS failover remain your responsibility.
 
@@ -131,21 +145,27 @@ Keep every server-defaulted field. A change to the Deployment after you compute 
 
 ## Recover an interrupted operation
 
-If a command is interrupted, do not start another operation and do not apply Kubernetes changes by hand. Keep the original request files and status output. When the interrupted command's lease has expired, rerun with the same files and flags, replacing `prepare` with `recover`:
+If a command is interrupted, do not start another operation and do not apply Kubernetes changes by hand.
 
-```sh
-python3 scripts/deployment-lifecycle.py recover --config ../operation.json \
-  --context "$KUBE_CONTEXT" --qualify-native --promote-native --drain-native --finalize \
-  --image-manifest ../candidate-manifest.json --image-configuration ../candidate-config.json
-```
+1. Keep the original request files and the status output.
+2. Wait until the interrupted command's lease has expired.
+3. Rerun with the same files and flags, replacing `prepare` with `recover`:
+
+   ```sh
+   python3 scripts/deployment-lifecycle.py recover --config ../operation.json \
+     --context "$KUBE_CONTEXT" --qualify-native --promote-native --drain-native --finalize \
+     --image-manifest ../candidate-manifest.json --image-configuration ../candidate-config.json
+   ```
 
 Recovery re-establishes the route to the new generation and continues retiring the old one. It does not replay a scale change whose result is unknown.
 
-If the interruption happened during the storage check, add `--abandon-native-storage` to `recover` with `--qualify-native`. The operator discards that attempt's results, starts a fresh check and requires a complete pass before admission. It deletes nothing: the test objects the interrupted run wrote stay in the bucket and are listed under `cleanup_debt` in the status output. They contain only synthetic bytes, so delete them once storage activity has stopped. This option cannot be combined with a recovery that already moved traffic.
+If the interruption happened during the storage check, add `--abandon-native-storage` to `recover` with `--qualify-native`. The operator discards that attempt's results, starts a fresh check and requires a complete pass before admission. This option cannot be combined with a recovery that already moved traffic.
+
+It deletes nothing. The test objects the interrupted run wrote stay in the bucket and are listed under `cleanup_debt` in the status output. They contain only synthetic bytes, so delete them once storage activity has stopped.
 
 An initial installation that failed or stopped uncertain cannot be retried blindly. Keep the stored challenge identity, clean up its exact test keys, then start again. Never replay the database bootstrap to hide an uncertain admission.
 
-If schema maintenance is interrupted, resume it only with the same chart, values, images and operation. Changed assets cannot resume an active schema receipt. Keep the hook logs and database status, and contact [support](/more/support/) if it cannot finish. Do not clear failed state manually. `recover` does not cover schema maintenance. See also [Schema changes and migration failures](#schema-changes-and-migration-failures).
+`recover` does not cover schema maintenance. If schema maintenance is interrupted, resume it only with the same chart, values, images and operation. Keep the hook logs and database status, and contact [support](/more/support/) if it cannot finish. Do not clear failed state manually. See also [Schema changes and migration failures](#schema-changes-and-migration-failures).
 
 ## Enterprise: native mode
 
@@ -230,39 +250,18 @@ If a storage check was interrupted, add `--abandon-storage`. As with native mode
 
 Schema changes run in chart hooks, not in the operator. These procedures apply when a release changes the database schema.
 
-### Approve a certified online schema change
+### Online schema changes
 
-By default, migrations run in `maintenance` mode, which is disruptive. Set `migrations.mode=online` only when the signed chart contains a certificate for the exact additive transition you are applying. A chart with an empty certificate list supports converged online checks only. Keep the chart, values and certificate file unchanged through the run and any retry.
-
-1. Run `verify.py` on the operator, then install the census and the protected approval routines against the same idle installation and its completed schema receipt. Use the ordinary restricted schema migrator for the census, and a separate provider login that may assume `xberg_role_root` for the protected stage. Pass connections through PostgreSQL service definitions or your secret mechanism.
-
-   ```sh
-   psql 'service=xberg-schema-migrator' -X -v ON_ERROR_STOP=1 \
-     -v online_additive_stage=census -v online_installation="$INSTALLATION_ID" \
-     -v online_receipt_revision="$RECEIPT_REVISION" -v online_schema_digest="$CURRENT_SCHEMA_DIGEST" \
-     -f sql/deployment-online-additive-install.sql
-   psql 'service=xberg-bridge-provider' -X -v ON_ERROR_STOP=1 \
-     -v online_additive_stage=protected -v online_installation="$INSTALLATION_ID" \
-     -v online_receipt_revision="$RECEIPT_REVISION" -v online_schema_digest="$CURRENT_SCHEMA_DIGEST" \
-     -f sql/deployment-online-additive-install.sql
-   ```
-
-2. Review the planner's output for the installation against the chart's certificate before you approve.
-3. In one `READ COMMITTED` transaction as the provider login, assume `xberg_role_root`, call `xberg_deployment_bridge.approve_online_additive_transition`, then call `seal_online_additive_execution` with the same approval UUID, and commit. The approval takes a fresh UUID that expires within 24 hours, the installation, receipt revision, current and target schema digests, the catalog, plan and certificate hashes, product, schema and runtime protocol range, the ordered column steps and the expiry. Take the target digest from the SHA-256 of the packaged `schema.sql` with a `sha256:` prefix, the plan hash from the planner's `source_fingerprint.hash`, the certificate hash from the SHA-256 of `online-transition-certificates.json`, and the catalog hash from `online_additive_catalog_sha256('[]')`.
-4. Upgrade with `migrations.mode=online` and `migrations.onlineApprovalId=<approval UUID>`. The hook keeps using the restricted migrator. Keep the provider credential out of Helm.
-
-To retry the same release, keep the same approval ID. For later releases, supply complete values without `migrations.onlineApprovalId`. With `--reuse-values`, clear it with `--set-string migrations.onlineApprovalId=`. If the source catalog, certified plan or receipt changes before a successful apply, review the new state and approve again. A change outside the certified scope needs the maintenance procedure.
-
-To verify, check that the upgrade hook completed and that the approval shows as consumed in the completed receipt.
+By default, migrations run in `maintenance` mode, which stops the workload. `migrations.mode=online` accepts only a converged no-op today, and refuses anything else before it changes the database. Use the maintenance procedure for every schema change.
 
 ### Recover a failed Pro migration
 
 A failure during schema apply, maintenance grant reconciliation, controller API setup or role validation can leave the database on a different contract than the running image expects. When any of these hooks fails, the Pro chart keeps the StatefulSet scaled down and records the original replica count in the annotation `rollback.xberg.io/original-replicas`.
 
-1. Keep the workload scaled down and leave the maintenance fence in place.
-2. Capture the failed hook's ACL diagnostics and the active schema receipt, and send them to [support](/more/support/).
-3. Do not restart the previous image until its exact runtime role contract has been checked against the live database.
-4. For forward recovery, fix the verified cause and rerun the reviewed maintenance upgrade with the same chart, values and images. A newer chart or image can change the receipt's bindings and need a separate recovery.
+1. Keep the workload scaled down and leave the fence in place.
+2. Capture the failed hook's logs (`helm get hooks xberg-pro -n xberg-pro` and the hook job logs) and the active schema receipt, and send them to [support](/more/support/).
+3. Do not restart the previous image until support confirms it matches the live database.
+4. For forward recovery, fix the verified cause and rerun the reviewed maintenance upgrade with the same chart, values and images. A newer chart or image can change the receipt and need a separate recovery.
 
 After the hooks succeed and restore the recorded replica count, verify the replica count, readiness and an authenticated extraction before you route traffic. A recorded count of zero stays zero.
 

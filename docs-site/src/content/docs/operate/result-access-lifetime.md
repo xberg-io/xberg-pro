@@ -75,7 +75,7 @@ Scope:
 If a result upload was not acknowledged, the writer records an unsettled intent and does not send a second upload. After the intent expires, settle it for one known project, job and artifact:
 
 1. Apply the schema migration, deploy the compatible Pro runtime and drain all older Pro executors.
-2. Run a separate maintenance upgrade that grants reconciliation access:
+2. Run a separate maintenance upgrade that grants reconciliation access. This needs Pro chart 0.7.5 or later, because `migrations.retainedS3ReconciliationGrants` is not in earlier charts:
 
    ```sh
    helm upgrade ... --set migrations.retainedS3ReconciliationGrants=grant

@@ -41,15 +41,6 @@ NATS_URL="$NATS_URL" api --bootstrap-nats /etc/xberg-nats/provisioning.json
 
 The first prints the permissions to apply to your broker. The second needs the bootstrap identity and creates the `notifications-protected` stream and its durable consumer. Runtime identities can only inspect these resources, not create them.
 
-The manifest has two consumer fields, derived from the installation UUID without hyphens:
-
-```json
-{
-  "webhook_protected": "protected-webhook-11111111111141118111111111111111",
-  "webhook_protected_filter": "protected.notification.v1.11111111-1111-4111-8111-111111111111.>"
-}
-```
-
 ## Verify
 
 The API checks both prepared streams at startup and in its readiness probe, and the webhook service checks its stream and consumer before it pulls. If a pod is not ready, check its logs for a message naming the missing stream or consumer. Then list the resources:
@@ -66,4 +57,3 @@ Use the bootstrap credential for these commands. Runtime identities cannot list 
 - Messages are small references, not results. The webhook service rechecks the job and callback state in the database before it sends anything.
 - The stream has a 4 KiB message limit, 24-hour retention and a two-hour deduplication window. A notification can be published again after an uncertain database commit, so receivers must tolerate duplicates.
 - Messages for other installations, and legacy-mode messages, are ignored by this consumer.
-- Process health markers written during storage qualification can remain after a crash. They are harmless.

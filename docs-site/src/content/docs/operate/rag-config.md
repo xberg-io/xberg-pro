@@ -67,36 +67,23 @@ Deny-by-default is the safe baseline: with no egress rule there is no traffic. A
 
 ## Audit retention
 
-Every retrieve writes one row into the `rag_audit_events` table, which is partitioned monthly by `recorded_at`. The Enterprise chart ships a daily CronJob that detaches and drops partitions older than the retention window:
+Every retrieve writes a retrieval audit record. Records are kept for `ragAudit.retentionDays` (default 90). The Enterprise chart ships a daily CronJob that removes older records:
 
 | Helm value               | Default       | Purpose                                                |
 | ------------------------ | ------------- | ------------------------------------------------------ |
 | `ragAudit.enabled`       | `true`        | Render the CronJob. Set `false` if you do not use RAG. |
 | `ragAudit.schedule`      | `"0 3 * * *"` | Cron schedule, daily at 03:00 by default.              |
-| `ragAudit.retentionDays` | `90`          | Drop partitions older than this many days.             |
+| `ragAudit.retentionDays` | `90`          | Remove records older than this many days.              |
 
-The API process creates the current month's partition and the next two at startup, then refreshes hourly. Creation is idempotent.
-
-The `query_text` column is only filled when the collection has `audit_query_content = true`. Opt in per collection for deployments with legal or compliance needs. A request for LLM reranking returns `422 rag.rerank.invalid` when `audit_query_content = false`, because the LLM provider receives the raw query string. Preset reranking is unaffected.
+Query text is stored only when the collection sets `audit_query_content`. Opt in per collection for deployments with legal or compliance needs. A request for LLM reranking returns `422 rag.rerank.invalid` when `audit_query_content = false`, because the LLM provider receives the raw query string. Preset reranking is unaffected.
 
 ## Autoscaling (Enterprise)
 
-The RAG pod scales with KEDA. The NATS JetStream trigger is on by default, and the Prometheus trigger is opt-in, so by default there is one trigger:
-
-1. **NATS JetStream consumer lag.** The chart derives the monitoring endpoint from `global.natsMonitoringUrl` when set, or from the in-chart NATS deployment otherwise. It uses `rag.keda.natsAccount`, `rag.keda.natsStream` and `rag.keda.natsConsumer` to scale on pending ingest messages.
-2. **Prometheus metric.** Gated on `rag.keda.prometheus.enabled` (default `false`) and `rag.keda.prometheus.serverAddress` (default empty). The query references `rag_retrieve_requests_total`, which the RAG service does not emit. Enabling this trigger without a Prometheus instance that scrapes a metric of that name gives an always-empty query, not a working scaler.
-
-Configure each trigger through its own keys. The chart has no `rag.keda.triggers` list.
+The RAG pod scales with KEDA on NATS JetStream consumer lag. The chart derives the monitoring endpoint from `global.natsMonitoringUrl` when set, or from the in-chart NATS deployment otherwise. It uses `rag.keda.natsAccount`, `rag.keda.natsStream` and `rag.keda.natsConsumer` to scale on pending ingest messages.
 
 ## Vector index method
 
-Enterprise uses pgvectorscale (DiskANN) by default for large-scale vector storage, and HNSW (pgvector only) otherwise. The defaults are:
-
-- **Index method.** `DiskANN`, with `HNSW` as the fallback for smaller deployments or when pgvectorscale is unavailable.
-- **Storage layout.** `memory_optimized` with SBQ compression, which saves 4 to 8 times the memory.
-- **Per-collection partial indexes.** Each collection has its own index, so heterogeneous embedding dimensions do not conflict.
-- **Query-time parameters.** `query_search_list_size = min(top_k * 4, 10000)` and `query_rescore = max(top_k, 50)`. Rescoring restores recall lost to compression.
-- **Build-time parameters.** `maintenance_work_mem = 2GB` on the dedicated index build connection. The 64 MB default is too small for large collections.
+Enterprise uses DiskANN (pgvectorscale) by default and falls back to HNSW (pgvector only). Each collection has its own index, so collections with different embedding dimensions do not conflict.
 
 The pgvectorscale extension is optional. On PostgreSQL servers without it, notably Cloud SQL, set the deployment-wide default to HNSW so new collections use a pgvector-only index:
 
@@ -118,7 +105,3 @@ At startup the RAG runtime can warm the models it needs. The behavior differs sl
 Enterprise limits the process-wide engine caches with `rag.engineCache.embeddingMaxResident` and `rag.engineCache.rerankerMaxResident`. Both default to 2, and the service applies them before warmup or consumer startup. They are entry-count bounds, not hard memory ceilings, because active callers can retain an evicted engine. Set each at least as high as the number of collection presets a replica uses concurrently, or alternating requests rebuild evicted engines.
 
 Reranker presets load lazily on the first retrieve request that uses them. No flag pre-warms them, so the first request against a preset pays the warmup cost.
-
-## Usage accounting
-
-RAG operations write distinct `rag_retrieve` and `rag_rerank` rows to the `usage_events` table. Each row counts as one unit, regardless of rerank kind or duration. Export or aggregate the table with your own accounting system.

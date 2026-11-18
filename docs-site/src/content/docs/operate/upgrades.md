@@ -31,13 +31,9 @@ Migration hooks need `READ COMMITTED` and reject a different transaction default
 
 ## Pro on Docker Compose
 
-Do not use a plain `docker compose up` to upgrade a running installation. Dependency order alone does not drain the old application before the migration. Pull or select the target Pro image first, then run the upgrade script from the Compose bundle of that release, with the same environment file, Compose overrides and project name as the installation:
+Do not use a plain `docker compose up` to upgrade a running installation. Dependency order alone does not drain the old application before the migration.
 
-```bash
-./scripts/pro-upgrade.sh --env-file .env --project-name my-pro
-```
-
-The script stops Pro (respecting the configured stop grace period), verifies it stopped, runs the database bootstrap, starts the prepared image, checks health and enables worker claims. It does not build the image during maintenance. A bootstrap, startup or claims failure leaves Pro stopped. Correct the error and rerun the same command.
+Follow the [Upgrade](/start/pro-docker/#upgrade) section of the Pro with Docker guide. It stops Pro, reruns the database bootstrap, starts the new image and enables worker claims, using `.env.pro`. A bootstrap or startup failure leaves Pro stopped. Fix the reported error and rerun the same step.
 
 Keep the administrator password and the eight role passwords stable between routine restarts. Changing one is a credential rotation, and restarts must then use the matching new URL.
 
@@ -72,7 +68,7 @@ helm history xberg-pro -n xberg-pro
 helm get hooks xberg-pro -n xberg-pro
 ```
 
-Verify the target chart, image and database ownership-contract compatibility, then retry the same reviewed upgrade with `migrations.enabled=true`. The ordered hooks restore replica intent and enable configured claims. Verify the recorded replica count and the claims state separately. When the intended count is one, wait for the pod to become Ready and run `helm test` before you resume traffic. Preserve an intended replica count of zero, and never replace it with an unconditional scale to one. Scaling alone does not complete recovery. If the upgrade cannot complete, contact support.
+Preserve your reviewed configuration, because saved Helm values may omit direct changes to ConfigMaps or workloads. Verify the target chart, image and database ownership-contract compatibility, then retry the same reviewed upgrade with `migrations.enabled=true`. The ordered hooks restore replica intent and enable configured claims. Verify the recorded replica count and the claims state separately. When the intended count is one, wait for the pod to become Ready and run `helm test` before you resume traffic. Preserve an intended replica count of zero, and never replace it with an unconditional scale to one. Scaling alone does not complete recovery. If the upgrade cannot complete, contact support.
 
 ### Version-specific notes
 
@@ -85,9 +81,10 @@ Verify the target chart, image and database ownership-contract compatibility, th
   ```
 
 - **A restricted install bootstrapped before the maintenance recovery role.** Run the release's `maintenance-recovery-role-bootstrap.sql` once, as the same administrator and with `--set=role_admin_login=xberg_role_admin`, before the chart upgrade. Until then the chart's role hook and `scripts/pro-db-bootstrap.sh` refuse and name the supplement.
-- **Restricted bridge write permissions.** Before you deploy a chart that restricts the schema bridge functions, finish the previous maintenance operation and pause its reconcilers. From the new release's SQL assets, run `deployment-schema-bridge-control-upgrade.sql` with the existing migration login, then `deployment-schema-bridge-upgrade.sql` with the provider login that can assume `xberg_role_root`, passing `--set=bridge_installation="$INSTALLATION_ID"` to both. For a bridge never bound to an installation, run only the second with `bridge_installation=unbound`. Both scripts can be rerun. To roll the maintenance chart back across this change, finish the operation, then run the same two scripts with `--set=bridge_restore_legacy=true`, provider script first, before you install the older hooks.
+- **A release that changes migration privileges.** If the target release notes say the upgrade needs a database privilege change before the chart upgrade, finish the previous maintenance operation, pause its reconcilers and contact [support](/more/support/) for the reviewed procedure. Do the same before you roll such a release back.
+- **A database bootstrapped before the broker contract.** Databases bootstrapped with the current guides already satisfy it. For an older database, contact support. Do not reuse the role-administrator Secret for a one-time administrator credential.
 - **Keeping the public Service during a singleton upgrade.** To retain a Helm-installed public Service, set `service.ownershipBridge.name` and `service.ownershipBridge.uid` to its exact name and Kubernetes UID. The Service must belong to the same release and namespace with the same routing spec. The chart then adds `helm.sh/resource-policy: keep` to the stored Helm revision. Confirm with `helm get manifest`, and check that no GitOps controller prunes the Service. It does not cover switching to replicated mode, uninstalling the release or changing GitOps pruning.
-- **Online migrations.** `migrations.mode=online` runs a restricted schema job without stopping workloads. It accepts only a converged no-op or a transition covered by a certificate shipped in the chart, and refuses otherwise before any change. See [Approve a certified online schema change](/operate/deployment-operator/#approve-a-certified-online-schema-change).
+- **Online migrations.** `migrations.mode=online` accepts only a converged no-op today. Use the maintenance procedure for schema changes. See [Online schema changes](/operate/deployment-operator/#online-schema-changes).
 - **Upgrading a database initialized with the bundled bootstrap to 0.4.7 or later.** Rerun the target chart's packaged `pro-db-bootstrap.sh` with the same administrator, database and eight role passwords (see the [Pro Helm install](/start/pro-helm/#database-bootstrap)), and keep `PRO_DB_INITIALIZE_SCHEMA=true`. The script validates the existing layout, preserves data and restores the vector index owner's `USAGE` privilege on the schema that holds pgvector. The migration login cannot grant it on an administrator-owned extension schema. Afterward, request a new build for each collection whose index job failed before the repair.
 - **vectorscale 0.9.0 or 0.9.1.** An installation with these versions needs the permanent hybrid namespace migration before its next Helm schema migration. Run `migrate-extension-namespace.sh` from the chart's `charts/_distribution/files` with `XBERG_EXTENSION_NAMESPACE_MIGRATION_ACK=permanent-hybrid-v1` and three separate nonsuperuser credentials. Disable the one-time extension login afterward.
 - **Planning database.** New installs default `migrations.planningDatabaseBootstrap=false`. An upgrade that uses `--reuse-values` and stored the former `true` default needs `--set migrations.planningDatabaseBootstrap=false` once.
