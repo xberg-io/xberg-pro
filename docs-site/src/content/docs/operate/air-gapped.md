@@ -19,7 +19,7 @@ Extraction, the REST API, the dashboard and the bundled RAG runtime talk only to
 
 License verification is not an outbound call. See [License activation](#license-activation).
 
-The Enterprise CPU and GPU worker images include the pinned tree-sitter grammar pack, its notices and provenance, so code-file ingestion needs no GitHub egress. Custom worker images must include a parser pack matching their `tree-sitter-language-pack` crate version and set `TREE_SITTER_LANGUAGE_PACK_LIBS_DIR` to the directory that holds its libraries. The Pro image does not include this pack yet, so avoid code-file ingestion on an air-gapped Pro install.
+The Enterprise CPU and GPU worker images include the pinned tree-sitter grammar pack, its notices and provenance, so code-file ingestion needs no GitHub egress. Custom worker images must include a parser pack matching their `tree-sitter-language-pack` crate version and set `TREE_SITTER_LANGUAGE_PACK_LIBS_DIR` to the directory that holds its libraries. The Pro image does not include this pack, so code-file ingestion is unavailable on an air-gapped Pro install.
 
 ## Prerequisites
 

@@ -39,7 +39,7 @@ Entries match in two modes:
 - **Exact match.** `example.com` matches only `example.com`.
 - **Suffix match.** `.internal.example.com` matches `s3.internal.example.com`, `backup.internal.example.com` and the apex `internal.example.com`.
 
-If the allowlist is empty or unset, Enterprise services refuse every custom storage endpoint. The API, worker and RAG services fail to start with a `ConfigError` that names the disallowed endpoint, rather than falling back to a cloud backend. Set the allowlist on Pro as well, so behavior stays consistent across both products.
+Pro and Enterprise enforce the allowlist at startup. If you set `GCS_ENDPOINT`, `S3_ENDPOINT` or `AZURE_ENDPOINT` and the allowlist is empty or does not cover the host, the service fails to start with an error that names the endpoint. It never falls back to a cloud backend. This applies to the Pro container and to the Enterprise API, backend, worker and RAG services. Without a custom endpoint, the allowlist has no effect.
 
 ### Example: RustFS inside the cluster
 
@@ -56,7 +56,7 @@ Then point the Helm values of each component that touches storage at the same se
 
 ### Adopt the allowlist on an existing deployment
 
-An existing deployment that uses a custom storage endpoint must add the endpoint hostname to `STORAGE_ENDPOINT_ALLOWLIST` before it upgrades.
+An existing deployment that uses a custom storage endpoint must add the endpoint hostname to `STORAGE_ENDPOINT_ALLOWLIST` before it upgrades, or it fails to start. On Pro, set it in `configMap`.
 
 1. Set `STORAGE_ENDPOINT_ALLOWLIST` to your custom endpoint hostname.
 2. Deploy the updated release.
@@ -70,7 +70,7 @@ When the chart's NetworkPolicy is enabled, also allow egress to the endpoint.
 
 ### S3 path style
 
-`S3_PATH_STYLE` controls bucket addressing. `true` selects path style (`https://endpoint/bucket/key`). The default `false` selects virtual-host style (`https://bucket.endpoint/key`). RustFS and most S3-compatible endpoints need `S3_PATH_STYLE=true`. Set the flag explicitly instead of relying on a value carried over from an older release, because earlier releases interpreted it the other way around.
+`S3_PATH_STYLE` controls bucket addressing. `true` selects path style (`https://endpoint/bucket/key`). The default `false` selects virtual-host style (`https://bucket.endpoint/key`). RustFS and most S3-compatible endpoints need `S3_PATH_STYLE=true`. Set the flag explicitly.
 
 ### GCS credentials for custom endpoints
 

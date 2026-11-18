@@ -1,17 +1,47 @@
 ---
 title: Protected notification transport
-description: Configure the installation-specific NATS notification manifest that replicated Enterprise extraction requires.
+description: Prepare the installation-specific NATS notification stream that replicated Enterprise requires before its pods start.
 sidebar:
   order: 11
 ---
 
-**Available in:** Enterprise, replicated deployments
+**Available in:** Enterprise (replicated deployments)
 
-Replicated extraction needs an installation-specific notification manifest alongside the prepared extraction transport. Legacy mode keeps the existing `jobs` stream and `webhook-delivery` consumer.
+## When you need it
 
-## Manifest fields
+Replicated Enterprise (`deployment.mode=replicated`) sends job completion notifications through a dedicated NATS stream, `notifications-protected`, scoped to one installation. You must prepare it before the pods start. Non-replicated installs keep the existing `jobs` stream and `webhook-delivery` consumer and skip this page.
 
-Set both optional manifest fields under `consumers`:
+## Configure
+
+Set the installation identifier in the Helm values. Both values must be the same UUID:
+
+```yaml
+deployment:
+  installationId: 11111111-1111-4111-8111-111111111111
+global:
+  natsNotifications:
+    prepared: true
+    installationId: 11111111-1111-4111-8111-111111111111
+```
+
+The chart derives the consumer names and the NATS permissions for the API and webhook services from this UUID. Rendering fails if it is missing or does not match `deployment.installationId`. All generations of one installation share the same stream and consumer. The pods read the UUID at runtime as `ENTERPRISE_DEPLOYMENT_INSTALLATION_ID`.
+
+The notification resources are required even when `webhooks.enabled=false`. The API still publishes completion references, and they expire after 24 hours if nothing reads them.
+
+## Provision the stream
+
+With the bundled NATS, the chart's provisioning Job creates the stream and consumer before the workloads become ready. Nothing else is needed.
+
+With an external broker (`nats.enabled=false`), the broker must carry the same permissions the chart renders, and the stream must exist before replicated startup. The API image provides two offline commands that take the provisioning manifest the chart renders:
+
+```sh
+api --render-nats-policy /etc/xberg-nats/provisioning.json
+NATS_URL="$NATS_URL" api --bootstrap-nats /etc/xberg-nats/provisioning.json
+```
+
+The first prints the permissions to apply to your broker. The second needs the bootstrap identity and creates the `notifications-protected` stream and its durable consumer. Runtime identities can only inspect these resources, not create them.
+
+The manifest has two consumer fields, derived from the installation UUID without hyphens:
 
 ```json
 {
@@ -20,22 +50,20 @@ Set both optional manifest fields under `consumers`:
 }
 ```
 
-The durable suffix is the installation UUID without hyphens. The filter contains the exact canonical installation UUID. Both fields must match `ENTERPRISE_DEPLOYMENT_INSTALLATION_ID` at runtime. Generations A and B of one installation share this durable.
+## Verify
 
-## Helm values
+The API checks both prepared streams at startup and in its readiness probe, and the webhook service checks its stream and consumer before it pulls. If a pod is not ready, check its logs for a message naming the missing stream or consumer. Then list the resources:
 
-Set `global.natsNotifications.prepared=true` and `global.natsNotifications.installationId` to the same UUID as `deployment.installationId`. The chart derives both consumer fields and the conditional API and webhook permissions from that one value. Rendering a replicated chart fails when the binding is absent or mismatched. An externally managed broker must use the rendered policy too, because the chart does not assume separate accounts or namespaces.
+```sh
+nats stream info notifications-protected
+nats consumer ls notifications-protected
+```
 
-## Render the policy and provision the stream
+Use the bootstrap credential for these commands. Runtime identities cannot list consumers.
 
-Use the service binary's offline `--render-nats-policy <manifest>` command to render the exact optional permissions. Apply that policy to the broker through your normal configuration workflow. Then run `--bootstrap-nats <manifest>` with the bootstrap identity and `NATS_URL` to provision the `notifications-protected` stream and its durable. Runtime API and webhook identities only inspect existing resources and cannot create consumers or streams.
+## Delivery behavior
 
-The API keeps its normal NATS connection for notification publication. It authenticates extraction requests separately with `NATS_EXTRACTION_PUBLISHER_USER` and `NATS_EXTRACTION_PUBLISHER_PASSWORD`, so no new notification credential is needed. API startup and readiness verify both prepared lanes. Webhook startup verifies its installation binding and the exact stream and consumer configuration before it pulls.
-
-## Messages and delivery
-
-Notification subjects follow `protected.notification.v1.<installation>.<completed|failed|cancelled>.<project>`. The MessagePack payload is a minimal `JobCompletion` reference, with the durable SQL event UUID as `Nats-Msg-Id`. It carries no result, caller metadata, inline callback or LLM payload. SQL stays authoritative: webhook delivery verifies the event, job, project, installation, runtime admission and callback state instead of trusting message fields.
-
-The stream uses work-queue retention, a 4 KiB message cap, 24-hour retention and a two-hour deduplication window. A publication followed by an ambiguous SQL commit can replay, so delivery is not exactly-once. Messages from legacy mode and from other installations fall outside the installation's durable filter. Synthetic process health markers use exact Get, Put and Delete access. They do not replace the shared-storage qualification protocol, and they can remain after a crash.
-
-The notification resource pair is still required when `webhooks.enabled=false`. The API durably publishes minimal terminal references while no webhook workload runs, and the admission cohort contains only the enabled API and worker components. References expire after the stream retention period if no reader runs. Preparing the durable creates no webhook runtime identity and adds no credential.
+- Messages are small references, not results. The webhook service rechecks the job and callback state in the database before it sends anything.
+- The stream has a 4 KiB message limit, 24-hour retention and a two-hour deduplication window. A notification can be published again after an uncertain database commit, so receivers must tolerate duplicates.
+- Messages for other installations, and legacy-mode messages, are ignored by this consumer.
+- Process health markers written during storage qualification can remain after a crash. They are harmless.

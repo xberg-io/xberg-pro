@@ -39,13 +39,15 @@ Do not use a plain `docker compose up` to upgrade a running installation. Depend
 
 The script stops Pro (respecting the configured stop grace period), verifies it stopped, runs the database bootstrap, starts the prepared image, checks health and enables worker claims. It does not build the image during maintenance. A bootstrap, startup or claims failure leaves Pro stopped. Correct the error and rerun the same command.
 
-Keep all nine bootstrap passwords stable between routine restarts. Changing one is a credential rotation, and restarts must then use the matching new URL.
+Keep the administrator password and the eight role passwords stable between routine restarts. Changing one is a credential rotation, and restarts must then use the matching new URL.
 
 ## Pro on Helm
 
-For a configuration-only change, keep the installed chart version and use the chart source that matches it. The check below refuses a different version:
+For a configuration-only change, keep the installed chart version and use the chart source that matches it. Set `PRO_CHART_SOURCE` to the extracted chart directory (or the chart archive) and `PRO_VALUES_FILE` to your values file, as in the [Pro Helm install](/start/pro-helm/#download-the-chart). The check below refuses a different version:
 
 ```shell
+export PRO_CHART_SOURCE=/path/to/pro
+export PRO_VALUES_FILE=/path/to/pro-values.yaml
 export VERSION=$(helm get metadata xberg-pro -n xberg-pro -o json | jq -er .version)
 helm show chart "$PRO_CHART_SOURCE" | grep -Fxq "version: $VERSION" || {
   printf 'Use the chart archive matching the installed version for configuration-only upgrades.\n' >&2
@@ -75,7 +77,7 @@ Verify the target chart, image and database ownership-contract compatibility, th
 ### Version-specific notes
 
 - **0.4.0 and later.** The bundled PostgreSQL subchart and the independent `migrations.image`, `migrations.psqlImage`, `migrations.kubectlImage` and `tests.images.curl` values are removed. Provision PostgreSQL separately and remove those values from your overrides. A `--reuse-values` upgrade from 0.3.3 keeps the removed values and fails with a migration message, so use a reviewed values file with the current Secret references and the single image digest.
-- **Upgrading a database initialized with the bundled bootstrap to 0.4.7 or later.** Rerun the target chart's packaged `pro-db-bootstrap.sh` with the same administrator, database and eight role passwords, and keep `PRO_DB_INITIALIZE_SCHEMA=true`. The script validates the existing layout, preserves data and restores the vector index owner's `USAGE` privilege on the schema that holds pgvector. The migration login cannot grant it on an administrator-owned extension schema. Afterward, request a new build for each collection whose index job failed before the repair.
+- **Upgrading a database initialized with the bundled bootstrap to 0.4.7 or later.** Rerun the target chart's packaged `pro-db-bootstrap.sh` with the same administrator, database and eight role passwords (see the [Pro Helm install](/start/pro-helm/#database-bootstrap)), and keep `PRO_DB_INITIALIZE_SCHEMA=true`. The script validates the existing layout, preserves data and restores the vector index owner's `USAGE` privilege on the schema that holds pgvector. The migration login cannot grant it on an administrator-owned extension schema. Afterward, request a new build for each collection whose index job failed before the repair.
 - **vectorscale 0.9.0 or 0.9.1.** An installation with these versions needs the permanent hybrid namespace migration before its next Helm schema migration. Run `migrate-extension-namespace.sh` from the chart's `charts/_distribution/files` with `XBERG_EXTENSION_NAMESPACE_MIGRATION_ACK=permanent-hybrid-v1` and three separate nonsuperuser credentials. Disable the one-time extension login afterward.
 - **Planning database.** New installs default `migrations.planningDatabaseBootstrap=false`. An upgrade that uses `--reuse-values` and stored the former `true` default needs `--set migrations.planningDatabaseBootstrap=false` once.
 - **RAG model cache.** The chart no longer sets `XBERG_RAG_MODEL_CACHE_DIR`. After `helm upgrade --reuse-values`, Pro starts, ignores the old value and logs one warning. Once retrieval and reranking work on the upgraded pod, delete the orphaned copies with `kubectl exec -n xberg-pro xberg-pro-0 -- sh -c 'rm -rf /data/rag-models/models--*'`. The command leaves the live cache under `/data/rag-models/hf` alone.
@@ -91,7 +93,7 @@ Keep `--server-side=false` for Helm upgrades. Client-side apply avoids ownership
 
 For an external KEDA installation, install its CRDs first. For bundled KEDA, install with `keda.crdsPreinstalled=false`, then upgrade with `keda.crdsPreinstalled=true` once the CRDs and operator are ready. Without it, the chart renders no ScaledObject.
 
-Replicated deployments (`deployment.mode=replicated`) do not use `helm upgrade`. The [deployment operator](/operate/deployment-operator/) owns generation rollouts.
+Replicated deployments (`deployment.mode=replicated`), on Pro and Enterprise, do not use `helm upgrade`. The [deployment operator](/operate/deployment-operator/) owns generation rollouts.
 
 ## Rollback
 

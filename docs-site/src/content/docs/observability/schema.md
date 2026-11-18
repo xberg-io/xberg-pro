@@ -29,7 +29,7 @@ Enterprise runs the first eight services. Pro runs one process that reports as `
 
 ## Metrics
 
-The Prometheus exporter runs without counter suffixes, so a metric's name on the wire is exactly the name registered in code and nothing is appended for you. Most counters carry an explicit `_total`, but not all do. See the `audit_write_failures` note under Pro. Label keys are registered in dotted OpenTelemetry form and rendered with underscores, so `http.request.method` appears as `http_request_method`.
+The Prometheus endpoint appends no suffixes, so the names below are exactly what you query. Most counters end in `_total`, but not all do. See the `audit_write_failures` note under Pro. Label keys use dotted OpenTelemetry names in the tables and appear with underscores in Prometheus, so `http.request.method` becomes `http_request_method`.
 
 ### HTTP RED (all services)
 
@@ -66,7 +66,7 @@ Each consuming service (worker, webhook) emits these.
 
 ### Outbound HTTP
 
-Every outbound call the platform makes emits these: webhook delivery, crawling, storage endpoints and managed LLM calls.
+Every outbound call the platform makes emits these: webhook delivery, crawling, storage endpoints and LLM provider calls.
 
 | Metric                                   | Type      | Unit    | Labels                                                                                           | Description                  |
 | ---------------------------------------- | --------- | ------- | ------------------------------------------------------------------------------------------------ | ---------------------------- |
@@ -75,22 +75,22 @@ Every outbound call the platform makes emits these: webhook delivery, crawling, 
 
 ### Worker
 
-| Metric                                                         | Type                  | Unit    | Labels                                                           | Description                                            |
-| -------------------------------------------------------------- | --------------------- | ------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
-| `jobs_processed_total`                                         | Counter               | count   | `status` (`completed` or `failed`)                               | Jobs that reached a terminal state                     |
-| `job_processing_duration_seconds`                              | Histogram             | seconds | none                                                             | Wall-clock extraction time (cache hits record nothing) |
-| `extraction_errors_total`                                      | Counter               | count   | by error type                                                    | Extraction errors                                      |
-| `extraction_outcomes_total`                                    | Counter               | count   | `result` (`success` or `failure`), `error_category`, `mime_type` | Terminal extraction outcome per document               |
-| `job_memory_peak_mb`                                           | Histogram             | MB      | none                                                             | Peak memory per job                                    |
-| `job_cpu_avg_percent`                                          | Histogram             | percent | none                                                             | Average CPU during job processing                      |
-| `worker_active_jobs`                                           | UpDownCounter (gauge) | count   | none                                                             | Active job processing tasks                            |
-| `crawl_jobs_total`                                             | Counter               | count   | terminal status, `output_mode`                                   | Crawl jobs by outcome                                  |
-| `crawl_pages_total`                                            | Counter               | count   | `fetched` or `failed`                                            | Pages fetched by the crawler                           |
-| `crawl_duration_seconds`                                       | Histogram             | seconds | `output_mode`                                                    | End-to-end crawl duration                              |
-| `llm_tokens_total`                                             | Counter               | count   | `provider`, `model`, `key_mode`                                  | LLM tokens used for structured extraction              |
-| `llm_calls_total`                                              | Counter               | count   | `provider`, `model`, `result`                                    | LLM API calls                                          |
-| `llm_call_duration_seconds`                                    | Histogram             | seconds | `provider`, `model`                                              | LLM API call latency                                   |
-| `extraction_cache_hits_total`, `extraction_cache_misses_total` | Counter               | count   | none                                                             | Extraction cache effectiveness                         |
+| Metric                                                         | Type                  | Unit    | Labels                                                                                      | Description                                            |
+| -------------------------------------------------------------- | --------------------- | ------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `jobs_processed_total`                                         | Counter               | count   | `status` (`completed` or `failed`)                                                          | Jobs that reached a terminal state                     |
+| `job_processing_duration_seconds`                              | Histogram             | seconds | none                                                                                        | Wall-clock extraction time (cache hits record nothing) |
+| `extraction_errors_total`                                      | Counter               | count   | by error type                                                                               | Extraction errors                                      |
+| `extraction_outcomes_total`                                    | Counter               | count   | `result` (`success` or `failure`), `error_category`, `mime_type`                            | Terminal extraction outcome per document               |
+| `job_memory_peak_mb`                                           | Histogram             | MB      | none                                                                                        | Peak memory per job                                    |
+| `job_cpu_avg_percent`                                          | Histogram             | percent | none                                                                                        | Average CPU during job processing                      |
+| `worker_active_jobs`                                           | UpDownCounter (gauge) | count   | none                                                                                        | Active job processing tasks                            |
+| `crawl_jobs_total`                                             | Counter               | count   | terminal status, `output_mode`                                                              | Crawl jobs by outcome                                  |
+| `crawl_pages_total`                                            | Counter               | count   | `fetched` or `failed`                                                                       | Pages fetched by the crawler                           |
+| `crawl_duration_seconds`                                       | Histogram             | seconds | `output_mode`                                                                               | End-to-end crawl duration                              |
+| `llm_tokens_total`                                             | Counter               | count   | `provider`, `model`                                                                         | LLM tokens used for structured extraction              |
+| `llm_calls_total`                                              | Counter               | count   | `provider`, `model`, `result` (`success`, `timeout`, `rate_limit`, `server_error`, `other`) | LLM provider calls                                     |
+| `llm_call_duration_seconds`                                    | Histogram             | seconds | `provider`, `model`                                                                         | LLM provider call latency                              |
+| `extraction_cache_hits_total`, `extraction_cache_misses_total` | Counter               | count   | none                                                                                        | Extraction cache effectiveness                         |
 
 The worker also emits a long tail of crawl fan-out and reaper counters, such as `crawl_documents_discovered_total`, `crawl_children_spawned_total`, `crawl_quota_exhaustion_total` and `worker_reaper_stuck_jobs_failed_total`. List them from the `/metrics` endpoint of a running worker.
 
@@ -133,7 +133,6 @@ The log message lands under `fields.message`, not at the top level. No `spans` a
 {
   "timestamp": "2026-05-16T14:22:33.123456Z",
   "level": "INFO",
-  "target": "api::rest::jobs",
   "span": {
     "name": "api.get_job",
     "job_id": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
@@ -163,9 +162,4 @@ Spans carry context fields such as `project_id` and `job_id`.
 
 ## Label stability
 
-Metric names, log field names and span names are a public contract.
-
-- **Deprecation.** A replacement label or metric is added with a `_v2` suffix. The original stays for one minor version and is removed in the next.
-- **Breaking changes.** Removing a widely used metric requires a major version bump, announced in the changelog two weeks ahead.
-
-For example, if `http.response.status_code` were renamed to `http.status`, both would be emitted through v1.x, the release notes would warn, and the old name would go in v2.0.
+Treat metric names, log field names and span names as the contract that dashboards and alerts depend on. Pin your dashboards to the names on this page, and read the release notes before you upgrade. The one known divergence between tiers is the audit write failure counter described under Pro.

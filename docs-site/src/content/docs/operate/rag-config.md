@@ -86,7 +86,7 @@ The RAG pod scales with KEDA. The NATS JetStream trigger is on by default, and t
 1. **NATS JetStream consumer lag.** The chart derives the monitoring endpoint from `global.natsMonitoringUrl` when set, or from the in-chart NATS deployment otherwise. It uses `rag.keda.natsAccount`, `rag.keda.natsStream` and `rag.keda.natsConsumer` to scale on pending ingest messages.
 2. **Prometheus metric.** Gated on `rag.keda.prometheus.enabled` (default `false`) and `rag.keda.prometheus.serverAddress` (default empty). The query references `rag_retrieve_requests_total`, which the RAG service does not emit. Enabling this trigger without a Prometheus instance that scrapes a metric of that name gives an always-empty query, not a working scaler.
 
-Each trigger is assembled from these discrete keys, and no single `rag.keda.triggers` list exists.
+Configure each trigger through its own keys. The chart has no `rag.keda.triggers` list.
 
 ## Vector index method
 
@@ -98,7 +98,7 @@ Enterprise uses pgvectorscale (DiskANN) by default for large-scale vector storag
 - **Query-time parameters.** `query_search_list_size = min(top_k * 4, 10000)` and `query_rescore = max(top_k, 50)`. Rescoring restores recall lost to compression.
 - **Build-time parameters.** `maintenance_work_mem = 2GB` on the dedicated index build connection. The 64 MB default is too small for large collections.
 
-pgvectorscale is optional. On PostgreSQL servers without it, notably Cloud SQL, set the deployment-wide default to HNSW so new collections use a pgvector-only index:
+The pgvectorscale extension is optional. On PostgreSQL servers without it, notably Cloud SQL, set the deployment-wide default to HNSW so new collections use a pgvector-only index:
 
 - **Helm value:** `vectorstore.defaultIndexMethod: "hnsw"`
 - **Environment variable:** `XBERG_VECTORSTORE_DEFAULT_INDEX_METHOD=hnsw`, set on the `api`, `rag` and `worker` pods.

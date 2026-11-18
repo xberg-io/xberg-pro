@@ -5,15 +5,15 @@ sidebar:
   order: 13
 ---
 
-**Available in:** Pro
+**Available in:** Pro, Enterprise (the verifier command ships in the Pro image only)
 
-Every `audit_log` row commits to its predecessor by hash. A row that is altered or deleted after the fact leaves the chain unable to close. Verification walks a project's chain and reports the first break, which turns the audit log from a record into evidence. For what the log captures, see the [audit log guide](/guides/audit-log/).
+Every audit log row commits to its predecessor by hash. A row that is altered or deleted after the fact leaves the chain unable to close. Verification walks a project's chain and reports the first break, which turns the audit log from a record into evidence. For what the log captures, see the [audit log guide](/guides/audit-log/).
 
-The verifier ships in the Pro image as `/app/xberg-admin`. It reads the container's own `DATABASE_URL`, so an auditor needs no direct database session, which is the privilege an audit trail exists to make unnecessary.
+The verifier ships in the Pro image as `/app/xberg-admin`. It reads the container's own `DATABASE_URL`, so an auditor needs no direct database session. The Enterprise service images do not include it. Contact [support](/more/support/) to verify an Enterprise audit chain.
 
 ## Run it
 
-On Kubernetes, the chart deploys a single-replica StatefulSet whose container is named `pro`. The pod is named `<release>-pro-0` unless the release name already contains `pro`. In that case the chart's naming collapses the suffix, so a release named `xberg-pro` gives a pod named `xberg-pro-0`. Check `kubectl get pods` if you are unsure:
+On Kubernetes, the container is named `pro`. The pod is named `<release>-pro-0`, except that a release name already containing `pro` (such as `xberg-pro`) gives `xberg-pro-0`. Check `kubectl get pods` if unsure:
 
 ```bash
 kubectl exec -it <release>-pro-0 -c pro -- \
@@ -31,9 +31,7 @@ The command exits `0` when the chain is intact and non-zero when it is broken, s
 
 ## One project per run
 
-The verifier takes exactly one project ID and does not sweep. `audit_log` forces row-level security and the product has no `BYPASSRLS` role, so nothing can ask the database which projects exist without an escape-hatch policy that any caller could also satisfy. Drive the command from a project list you keep outside the database.
-
-The SQL function refuses to run without the matching project context instead of returning no rows. A verification control must not answer "intact" when it means "I saw nothing".
+The verifier takes exactly one project ID and does not sweep. Row-level security isolates each project's audit rows and no role bypasses it, so the verifier cannot list projects. Drive the command from a project list you keep outside the database. A run without a matching project fails instead of reporting an empty chain as intact.
 
 ## Read a break
 

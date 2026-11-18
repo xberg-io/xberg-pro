@@ -1,17 +1,21 @@
 ---
 title: Result access lifetime
-description: Limit how long newly admitted extraction results stay readable on generation-bound Xberg Pro.
+description: Make extraction results unreadable after a fixed time on replicated Xberg Pro.
 sidebar:
   order: 10
 ---
 
-**Available in:** Pro, generation-bound (replicated) deployments
+**Available in:** Pro (replicated deployments)
 
-Generation-bound Xberg Pro can limit access to newly admitted inline extraction results for a fixed time. The mode expires access through the job result and page handlers. It does not delete stored objects.
+## When to use it
 
-## Enable prospectively
+Use this when policy says a client must not be able to read an extraction result after a set time, for example 24 hours after the job finishes. After the lifetime passes, result and page reads return an error. It controls access only: the stored objects are not deleted.
 
-Start with an admitted generation configured through the [deployment operator](/operate/deployment-operator/). Keep its installation, generation, storage and configuration digest bindings. Add these variables to that generation's configuration:
+It applies to replicated Pro, set up with the [deployment operator](/operate/deployment-operator/). A single-instance Pro install cannot enable it.
+
+## Enable it
+
+Add these variables to the configuration of a new generation, then roll it out with the operator:
 
 ```sh
 PRO_RESULT_ACCESS_POLICY_EPOCH=1
@@ -23,25 +27,25 @@ PRO_RAG_ENABLED=false
 PRO_AUTO_TUNE_ENABLED=false
 ```
 
-Unset both result access variables to leave the feature disabled. Setting only one fails startup. The epoch must be a positive integer, and the lifetime must be between 1 and 315360000 seconds. Startup also fails when the policy is enabled in unbound singleton mode, with the standard data policy, or with shared result caches enabled. The normal generation startup checks, including required authentication and shared storage, still apply.
+| Variable                          | Meaning                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `PRO_RESULT_ACCESS_LIFETIME_SECS` | Seconds a result stays readable after the job finishes. 1 to 315360000. |
+| `PRO_RESULT_ACCESS_POLICY_EPOCH`  | A positive integer you increase each time you change the policy.        |
 
-The supported admission cohort is inline or multipart leaf extraction without document attachment. Integration sources and document version attachment are refused, and crawl is unsupported in the generation-bound runtime. Presigned upload creation and confirmation are refused while this policy is enabled, including confirmation of a batch staged before activation. Use a separate installation, or leave this mode disabled, for those flows.
+Set both result access variables or neither. Setting only one makes startup fail. Startup also fails if the policy is combined with a single-instance install, the standard data policy or shared result caches.
 
-## Access and policy changes
+The policy admits extraction jobs submitted inline or by multipart upload. These are refused while it is on: integration sources, document version attachment, crawl, and presigned upload creation and confirmation (including confirming a batch staged before you enabled it). Run those flows on a separate installation.
 
-Job creation, quota admission, recovery inputs and the accepted result policy commit together. Each newly admitted job records the configured epoch and lifetime. Jobs without an enrollment stay unmanaged, so enabling the mode does not apply retention to historical jobs.
+## Verify
 
-The database records terminal completion time. Once completion plus the accepted lifetime has elapsed, a new result read returns HTTP 410 with `job.result_expired`, even before any cleanup runs. A read acquired before expiry has a bounded 30-second read lease, and retained payload responses use `Cache-Control: private, no-store`. Bytes already delivered cannot be recalled.
+Submit a job, then read its result before and after the lifetime. After the lifetime, a read returns HTTP 410 with the error code `job.result_expired`. To test quickly, deploy a generation with a short lifetime such as `PRO_RESULT_ACCESS_LIFETIME_SECS=60` and confirm the error after a minute.
 
-Changing the configured epoch or lifetime affects later admissions only. It neither shortens nor lengthens an existing job's accepted lifetime, and it cannot restore expired access. Record policy changes with a new epoch and the generation's configuration digest. No bulk endpoint activates the policy for historical jobs.
+## How changes apply
 
-## Storage boundary
+- Each job records the epoch and lifetime in force when it was accepted. Changing the variables affects only later jobs. It does not shorten, extend or restore access for existing jobs.
+- Jobs accepted before you enabled the policy are not covered.
+- The lifetime counts from the job's completion time. A read that started before expiry may finish for up to 30 seconds. Responses carry `Cache-Control: private, no-store`, but bytes already delivered cannot be recalled.
 
-Input objects, results, page objects, recovery context and historical cache entries can remain stored after access expires. This mode runs no per-job physical cleanup and makes no promise about deletion time or content erasure. It does not:
+## What it does not do
 
-- Expire input access.
-- Revoke storage URLs that were already issued.
-- Reconcile backups or snapshots.
-- Activate Enterprise protected-result retention.
-
-To remove stored objects, apply lifecycle rules on your object store. See [Backup and restore](/operate/backup-and-restore/) for versioning and retention considerations.
+Input files, results, page images and cache entries stay in storage after access expires. The policy does not expire input access, revoke storage URLs already issued, clean up backups or snapshots, or enable Enterprise result retention. To delete objects, apply lifecycle rules in your object store. See [Backup and restore](/operate/backup-and-restore/) for versioning and retention considerations.

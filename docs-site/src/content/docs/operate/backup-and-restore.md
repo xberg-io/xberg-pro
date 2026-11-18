@@ -96,30 +96,22 @@ Restrict read access on the archive path to the restore role only.
 
 ### Restore from a logical dump
 
-The restore target must be an empty database on a server that provides the four extensions, in a cluster where the Xberg roles already exist (created by the [database bootstrap](/operate/cloud-sql/)).
+Do not create the target database yourself. Ownership of the database and the Xberg roles is set by the bootstrap, and a database created with another owner breaks the role setup. Prepare the target with the same bootstrap you used for the original install ([Cloud SQL and managed PostgreSQL](/operate/cloud-sql/) or the [Pro Helm install](/start/pro-helm/)), then load the dump over the schema it created.
 
-1. Create the empty database.
+1. Run the bootstrap against an empty database on a server that provides the four extensions, with `PRO_DB_INITIALIZE_SCHEMA=true`. It creates the roles, extensions, schema and ownership.
 
-   ```bash
-   createdb --owner=xberg_schema_migrator xberg
-   ```
-
-2. Install the extensions as an administrator who can create them.
+2. Restore the dump as the schema migration login, acting as the schema owner, the same way the bootstrap applies the schema. `--clean --if-exists` replaces the empty tables, and `--jobs` rebuilds indexes in parallel:
 
    ```bash
-   psql --dbname=xberg \
-     --command='CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS btree_gin; CREATE EXTENSION IF NOT EXISTS vector;'
-   ```
-
-3. Restore the dump. Use `--jobs` to rebuild indexes in parallel.
-
-   ```bash
-   pg_restore \
-     --dbname=xberg \
+   PGOPTIONS="-c role=xberg_schema_owner" pg_restore \
+     --dbname="$MIGRATION_DATABASE_URL" \
      --no-owner \
+     --clean --if-exists \
      --jobs=4 \
      xberg-20260817T031500Z.dump
    ```
+
+   `MIGRATION_DATABASE_URL` is the `xberg_schema_migrator` URL from the bootstrap. Tenant tables force row-level security, but `pg_dump` loads policies after the data, so the data load is not blocked.
 
 The vector index rebuild dominates restore time. An HNSW or DiskANN index on a large collection takes minutes to hours, so plan the maintenance window from a measured restore.
 
@@ -140,11 +132,14 @@ WHERE relrowsecurity AND NOT relforcerowsecurity;
 SELECT count(*) FROM pg_policies WHERE schemaname = 'public';
 -- Expect the same count as the source database.
 
--- 4. The tenant data is there. Run this as a superuser.
-SELECT count(*) FROM projects;
+-- 4. The tenant data is there.
+ANALYZE;
+SELECT relname, n_live_tup FROM pg_stat_user_tables
+WHERE relname IN ('projects', 'jobs', 'audit_log') ORDER BY relname;
+-- Expect counts close to the source database.
 ```
 
-Check 4 needs a superuser because `projects` forces row-level security. A plain count returns 0 for the table owner and for the application login, since the session sets no project or user context. No Xberg role holds `BYPASSRLS`.
+Check 4 uses table statistics because a plain `SELECT count(*)` returns 0 for every role: the tables force row-level security, the session sets no project context, and no Xberg role holds `BYPASSRLS`. This works on managed PostgreSQL, where no superuser is available. For an exact check, run the product's own reads: list projects and read back a known job through the API.
 
 Then run the product's migration against the restored database. The schema apply is declarative and idempotent, so it changes nothing when the restore is complete. On Helm, run `helm upgrade` with `migrations.enabled=true` and the installed chart version. A migration that reports pending schema changes means the dump predates the running application version. Let the migration finish before the services start serving.
 
