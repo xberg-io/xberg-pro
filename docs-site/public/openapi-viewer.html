@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Xberg Pro and Enterprise OpenAPI reference</title>
+  </head>
+  <body>
+    <div id="xberg-openapi"></div>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.68.0/dist/browser/standalone.js"
+      integrity="sha384-PhSzhE9ihf7z/cKeRSKAeP+oJMMzotyFv0EjvNYgL798a2ODBQVuJLTP4Klle6IB"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+    Scalar.createApiReference("#xberg-openapi", {
+      sources: [
+        {
+          title: "Xberg Pro",
+          url: "https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/pro/openapi.yaml",
+        },
+        {
+          title: "Enterprise data plane",
+          url: "https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/api/openapi.yaml",
+        },
+        {
+          title: "Enterprise control plane",
+          url: "https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/backend/openapi.yaml",
+        },
+      ],
+      agent: { disabled: true },
+      hideClientButton: true,
+      showOperationId: true,
+    });
+    </script>
+    <noscript>
+      Enable JavaScript to view the interactive reference, or download the specifications:
+      <a href="https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/pro/openapi.yaml">Pro</a>,
+      <a href="https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/api/openapi.yaml">Enterprise data plane</a>,
+      <a href="https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/backend/openapi.yaml"
+      >Enterprise control plane</a>.
+    </noscript>
+  </body>
+</html>

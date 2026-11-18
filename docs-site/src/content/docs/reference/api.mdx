@@ -1,0 +1,49 @@
+---
+title: API reference
+description: Interactive OpenAPI 3.1 reference for the Xberg Pro API and the Xberg Enterprise data-plane and control-plane APIs.
+sidebar:
+  order: 1
+---
+
+**Available in:** Pro, Enterprise
+
+Xberg publishes one OpenAPI document for Pro and two for Enterprise. Pick the document that matches your tier in the reference below.
+
+| Spec | Tier | Covers |
+|------|------|--------|
+| Xberg Pro | Pro | The whole Pro API in a single document: extraction, jobs, presets, RAG, auto-tune, crawling, enrichment, uploads, plus sign-in, projects, API keys, integrations and `/v1/license` |
+| Enterprise data plane | Enterprise | The extraction surface: `/v1/extract`, `/v1/jobs/*`, `/v1/enrich`, upload presigning and confirmation, `/v1/auto-tune/*`, `/v1/crawl-jobs/*`, `/v1/rag/*` and the preset routes |
+| Enterprise control plane | Enterprise | Projects, members, API keys, webhooks, integrations and the other management routes, which Enterprise serves from a separate service |
+
+The extraction surface is shared. Every data-plane route also exists on Pro, so client code written against the data plane runs against Pro. Pro serves project, API-key, sign-in and integration routes from the same process, so they appear in the Pro document and not in the Enterprise data-plane document.
+
+The documents are the ones the [Xberg SDKs](/start/sdks/) are generated from, pinned to SDK release `v0.12.0`. The SDK site also hosts the same reference at [docs.sdks.xberg.io/openapi/](https://docs.sdks.xberg.io/openapi/).
+
+<iframe
+  src="/openapi-viewer.html"
+  title="Xberg OpenAPI reference"
+  width="100%"
+  height="900"
+  loading="lazy"
+  style="border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem;"
+></iframe>
+
+<noscript>
+
+Enable JavaScript to use the interactive reference, or download the specifications:
+
+- [Pro](https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/pro/openapi.yaml)
+- [Enterprise data plane](https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/api/openapi.yaml)
+- [Enterprise control plane](https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/backend/openapi.yaml)
+
+</noscript>
+
+## Download the specifications
+
+Fetch a document to generate a client in another language or to import it into an API tool:
+
+```bash
+curl -fsSLO https://cdn.jsdelivr.net/gh/xberg-io/sdks@v0.12.0/spec/pro/openapi.yaml
+```
+
+Replace `pro` with `api` for the Enterprise data plane or `backend` for the Enterprise control plane. See [Authentication](/concepts/authentication/) for how requests are authorized.
