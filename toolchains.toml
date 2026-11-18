@@ -1,0 +1,2 @@
+baseline = "v1.18.0"
+task_sets = ["docs-site", "governance", "governance-check"]

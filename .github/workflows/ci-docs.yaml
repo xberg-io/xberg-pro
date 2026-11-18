@@ -1,0 +1,46 @@
+name: CI Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs-site/**"
+      - "README.md"
+      - "scripts/check-public-content.sh"
+      - ".textlintrc.json"
+      - ".github/workflows/ci-docs.yaml"
+  pull_request:
+    paths:
+      - "docs-site/**"
+      - "README.md"
+      - "scripts/check-public-content.sh"
+      - ".textlintrc.json"
+      - ".github/workflows/ci-docs.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  public-content:
+    name: Public content gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check for private references
+        run: bash scripts/check-public-content.sh
+
+  docs:
+    needs: public-content
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: xberg-io/actions/.github/workflows/reusable-docs-deploy.yml@v1
+    with:
+      prose-dependency-directory: docs-site
+      deploy: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
