@@ -422,7 +422,7 @@ The rest live next to the feature they limit:
 - RAG: `RAG_WARMUP_TIMEOUT_SECS`, `RAG_WARMUP_INTERVAL_SECS` and `RAG_QUERY_EMBED_TIMEOUT_SECS` in [RAG runtime](#rag-runtime).
 - Database: `DB_POOL_CHECKOUT_TIMEOUT_SECS` in [Database connections](#database-connections).
 - Webhooks: `PRO_WEBHOOK_MAX_RETRIES` and `PRO_WEBHOOK_HTTP_TIMEOUT_SECS` in [Webhooks and crawling](#webhooks-and-crawling).
-- Sign-in: `OIDC_HTTP_TIMEOUT_SECS` and `JWT_EXPIRATION_SECS` in [Web console sign-in with OIDC](#dashboard-sign-in-with-oidc).
+- Sign-in: `OIDC_HTTP_TIMEOUT_SECS` and `JWT_EXPIRATION_SECS` in [Web console sign-in with OIDC](#web-console-sign-in-with-oidc).
 - Storage: `STORAGE_PRESIGN_TTL_SECS` in [Storage](#storage).
 - Auto-tune: `PRO_AUTO_TUNE_MAX_WALL_CLOCK_SECS` in [Auto-tune](#auto-tune).
 - Uploads: `PRO_UPLOAD_REPLAY_GRACE_SECS` and `PRO_UPLOAD_GC_INTERVAL_SECS` in [Retention](#retention).
@@ -545,10 +545,10 @@ Set the base endpoint alone to export all three signals to one collector. Set pe
 
 ## Bundled web console
 
-| Variable                                                        | Default                 | Description                                                                                                                                                       |
-| --------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BACKEND_API_URL`, `DATA_PLANE_API_URL`, `PRO_INTERNAL_API_URL` | `http://127.0.0.1:8080` | Where the bundled web console reaches the API inside the container. The image sets them. Change them only when the console runs apart from the API.               |
-| `NEXT_PUBLIC_*`                                                 | image build             | Browser-visible console settings. The OIDC ones are served from `/runtime-env.js` at run time. See [Web console sign-in with OIDC](#dashboard-sign-in-with-oidc). |
+| Variable                                                        | Default                 | Description                                                                                                                                                         |
+| --------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BACKEND_API_URL`, `DATA_PLANE_API_URL`, `PRO_INTERNAL_API_URL` | `http://127.0.0.1:8080` | Where the bundled web console reaches the API inside the container. The image sets them. Change them only when the console runs apart from the API.                 |
+| `NEXT_PUBLIC_*`                                                 | image build             | Browser-visible console settings. The OIDC ones are served from `/runtime-env.js` at run time. See [Web console sign-in with OIDC](#web-console-sign-in-with-oidc). |
 
 ## Configuration file
 

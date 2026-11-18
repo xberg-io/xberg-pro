@@ -407,7 +407,7 @@ The response is a JSON usage report with `total_documents` set to `0`. Continue 
 The web console listens on `http://localhost:3000`. Human sign-in needs an OpenID Connect (OIDC) identity provider. An API key cannot create a browser session. Choose one of three paths:
 
 - **API only.** Skip the web console and call the REST API with `XBERG_ADMIN_KEY` or a project key. No identity provider is needed.
-- **OIDC sign-in.** Register a public OIDC client with PKCE, then set `OIDC_ISSUER_URL`, `OIDC_AUDIENCE`, `JWT_SECRET`, the three `NEXT_PUBLIC_OIDC_*` values and an allowlist (`PRO_ALLOWED_EMAILS` or `PRO_ALLOWED_EMAIL_DOMAINS`). Set `PRO_ADMIN_EMAILS` to the people who manage the instance. No first user becomes admin automatically. [Pro configuration](/reference/pro-configuration/#dashboard-sign-in-with-oidc) lists every variable and gives a Compose override.
+- **OIDC sign-in.** Register a public OIDC client with PKCE, then set `OIDC_ISSUER_URL`, `OIDC_AUDIENCE`, `JWT_SECRET`, the three `NEXT_PUBLIC_OIDC_*` values and an allowlist (`PRO_ALLOWED_EMAILS` or `PRO_ALLOWED_EMAIL_DOMAINS`). Set `PRO_ADMIN_EMAILS` to the people who manage the instance. No first user becomes admin automatically. [Pro configuration](/reference/pro-configuration/#web-console-sign-in-with-oidc) lists every variable and gives a Compose override.
 - **No authentication, evaluation only.** Add `PRO_AUTH_MODE=disabled` to `.env.pro` and recreate the stack. The UI and API then use a single persisted local workspace without login or API key. Anyone who can reach the service can use it, so restrict network access.
 
 ## Configuration
