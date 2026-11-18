@@ -14,7 +14,7 @@ Xberg can run with no outbound network access after three preparations on a conn
 Extraction, the REST API, the dashboard and the bundled RAG runtime talk only to PostgreSQL and your configured object store, both of which you run inside the perimeter. Pro's own binaries make three kinds of outbound call:
 
 1. **Model weights.** The Pro image carries the complete pinned classic OCR catalog under `/usr/share/xberg/ocr-models/hub`: the PaddleOCR artifacts, plus Sceptre's eight recognizers and its shared CRAFT detector. Embedding presets, rerankers, layout detection, named-entity recognition and chunking tokenizers are fetched from Hugging Face Hub on first use. Their persistent cache lives under `HF_HOME` or `XBERG_CACHE_DIR`, which stays `/data/models`.
-2. **Tesseract language files.** The image bakes in eight pinned `tessdata_fast` files under `/usr/share/tessdata`: `eng`, `deu`, `fra`, `spa`, `nld`, `kor`, `chi_sim` and the `osd` script-detection file. The Enterprise worker image ships the same set. OCR in those languages needs no network access. Any other language is fetched from `github.com/tesseract-ocr/tessdata_fast` into `$XBERG_CACHE_DIR/tessdata` the first time a job asks for it.
+2. **Tesseract language files.** The image bakes in ten pinned `tessdata_fast` files under `/usr/share/tessdata`: `eng`, `deu`, `fra`, `spa`, `nld`, `kor`, `chi_sim`, `jpn`, `jpn_vert` and the `osd` script-detection file. The Enterprise worker image ships the same set. OCR in those languages needs no network access. Any other language is fetched from `github.com/tesseract-ocr/tessdata_fast` into `$XBERG_CACHE_DIR/tessdata` the first time a job asks for it.
 3. **Optional egress.** Structured extraction against a hosted LLM, vision OCR through Gemini or OpenAI, LLM reranking against a hosted provider, the integration hub's OAuth round trip and source reads (Google Drive), crawl jobs that fetch the URLs you submit, and webhook deliveries to the URLs you register. None of these run unless you configure them, and baseline extraction needs none.
 
 License verification is not an outbound call. See [License activation](#license-activation).
@@ -49,9 +49,42 @@ Record the mirror's reported index digest and deploy the mirror repository with 
 Point the deployment at the mirror:
 
 - **Docker Compose.** Set `PRO_IMAGE` to the mirrored image's versioned tag or digest and `PRO_PULL_POLICY=missing` in your `.env` file.
-- **Helm.** In your override values, set `image.repository` to the mirror repository and `image.digest` to its `sha256:` index digest. A released chart already pins a digest, so changing `image.tag` alone does not select the mirror. Override `migrations.artifactImage` with its mirrored repository and digest, and set the `tests.images` entries when you run tests. Set `imagePullSecrets` if the mirror needs credentials, then check the `helm template` output for any reference to the old registries.
+- **Helm, same path layout.** If the mirror keeps the original repository paths under a prefix and preserves digests, set one value:
 
-For Enterprise, mirror each service image (`api`, `backend`, `worker`, `webhook`, `rag`, and `worker-gpu` if enabled) and the two migration images the same way. Set the matching `*.image.repository` and digest keys in the Enterprise chart values.
+  ```yaml
+  global:
+    imageRegistry: registry.example.com/mirror
+  ```
+
+  The chart puts the original repository path under that prefix, so `ghcr.io/xberg-io/xberg-pro@sha256:...` becomes `registry.example.com/mirror/xberg-io/xberg-pro@sha256:...`. The tag or digest is kept, and a digest still wins over a tag. The prefix applies only where an image repository still equals the packaged default. A different per-image repository takes precedence.
+
+- **Helm, different layout or digests.** Set `image.repository` to the mirror repository and `image.digest` to its `sha256:` index digest. A released chart already pins a digest, so changing `image.tag` alone does not select the mirror. Override `migrations.artifactImage` with its mirrored repository and digest, and set the `tests.images` entries when you run tests.
+
+Set `imagePullSecrets` if the mirror needs credentials, then check the `helm template` output for every container, init container and hook that still references the old registries.
+
+For Enterprise, mirror each enabled service image (`api`, `backend`, `worker`, `webhook`, `rag`, and `worker-gpu` if enabled), the migration images, the `ragAudit` image, any model-loader image under `dataLoader`, and `tests.images` if you run `helm test`. Use `global.imageRegistry` or the matching per-image `*.image.repository` and digest keys in the Enterprise chart values. If you use the optional bundled PostgreSQL subchart, its images need their own settings, and `global.imageRegistry` takes precedence over `postgresql.image.registry`. If its origin check rejects your mirror, verify the mirrored digests against the trusted source before you set `postgresql.global.security.allowInsecureImages=true` for that installation.
+
+If you use an Enterprise nginx ingress, supply the TLS Secret and certificate through your own process. To use cert-manager with an internal issuer, add an annotation such as `cert-manager.io/cluster-issuer: internal-issuer` under each applicable `api.ingress.annotations`, `backend.ingress.annotations` or `frontend.ingress.annotations`.
+
+### Verify Enterprise image evidence offline
+
+Each Enterprise image release comes with a signed evidence bundle: `enterprise-images.json`, its public key `enterprise-images.pub`, a Cosign bundle and the SBOM and provenance files it lists. Obtain it through your Xberg contact and transfer it with the mirrored images. Get the signing-key fingerprint through a separate channel, and verify with Cosign 3.1.4 or later:
+
+```bash
+set -euo pipefail
+cd image-evidence
+fingerprint=$(openssl pkey -pubin -in enterprise-images.pub -outform DER | shasum -a 256 | cut -d' ' -f1)
+test "$fingerprint" = "$ENTERPRISE_IMAGE_TRUSTED_KEY_SHA256"
+cosign trusted-root create --out private-trust.json
+cosign verify-blob --key enterprise-images.pub --trusted-root private-trust.json \
+  --insecure-ignore-tlog --bundle enterprise-images.sigstore.json enterprise-images.json
+
+jq -er '.images[] | (.provenance, .sboms[]) | "\(.sha256)  \(.file)"' enterprise-images.json |
+  shasum -a 256 -c -
+jq -er '.images[] | .indexes[] | .repository + "@" + .digest' enterprise-images.json
+```
+
+The signature is detached and uses the trusted key without a public transparency log. Compare each mirror index digest with the matching line from the last command. Provenance records the source revision, index and platform manifest digests.
 
 ## 2. Pre-seed the model cache
 
@@ -59,7 +92,7 @@ On the connected machine, start the same fully configured Pro image against an i
 
 Warmup fetches the named-entity model and the embedding preset of every collection that already exists, so create the collections you plan to run offline before the warmup pass. Warmup does not fetch everything. Also submit one job of each unbundled kind you plan to run offline, for example a retrieve request that uses reranking, because those models load on first use. PaddleOCR and Sceptre need no warmup.
 
-Copy the seeded `/data` volume onto the air-gapped host's persistent volume before the first start there. The volume holds `XBERG_CACHE_DIR` (`/data/models`) and, if you set a distinct `HF_HOME`, that directory too. The classic OCR catalog and Tesseract's eight bundled languages ship inside the image and need no seeding. A Tesseract language outside that set needs the same treatment: run one job that uses it on the connected machine first, so the file lands under `$XBERG_CACHE_DIR/tessdata` before you copy the volume.
+Copy the seeded `/data` volume onto the air-gapped host's persistent volume before the first start there. The volume holds `XBERG_CACHE_DIR` (`/data/models`) and, if you set a distinct `HF_HOME`, that directory too. The classic OCR catalog and Tesseract's ten bundled languages ship inside the image and need no seeding. A Tesseract language outside that set needs the same treatment: run one job that uses it on the connected machine first, so the file lands under `$XBERG_CACHE_DIR/tessdata` before you copy the volume.
 
 If you add collections with new embedding presets later, repeat the warmup pass on a connected machine and copy the volume again before the presets are needed offline. Turn `XBERG_RAG_WARMUP_ENABLED` back off when you finish, so the disconnected instance does not spend cycles rebuilding models it cannot download.
 
@@ -113,7 +146,7 @@ A missing model reports the Hugging Face offline message from step 3, not a time
 
 The chart-based product follows the same three preparations with different mechanics:
 
-- **Mirroring** is per service. Mirror `api`, `backend`, `worker`, `worker-gpu` (if enabled), `webhook` and `rag` individually, and set the matching `*.image.repository` and digest values.
+- **Mirroring** is per service. Mirror every enabled image as described in [step 1](#1-mirror-the-images). Set `global.imageRegistry` for packaged defaults and use per-image overrides for custom repositories.
 - **Pre-seeding** has no in-process warmup pass. On a connected machine, use the open-source Xberg CLI that matches the worker's engine version and a fresh staging directory:
 
   ```bash
@@ -122,8 +155,8 @@ The chart-based product follows the same three preparations with different mecha
   worker --upload-cache
   ```
 
-  Run the worker uploader with your bucket's storage variables and the same staging directory. It writes the model files and a `manifest.json` under `MODEL_CACHE_PREFIX` (default `models/v1`) in object storage, so there is no volume to copy by hand. Refresh the prefix before you roll out upgraded workers, so the manifest holds the new snapshot paths. In the cluster, set `worker.modelCache.strategy: objectStorage` and `worker.modelCache.objectStorage.required: true`. The chart's `sync-models` init container then copies the manifest's files into each pod, verifies checksums and blocks the pod if the sync fails. Set `dataLoader.enabled: true` to keep one node-local copy instead of one per pod. If the data loader already tried to sync the old manifest, restart its DaemonSet after the upload.
+  Run the worker uploader with your bucket's storage variables and the same staging directory. It writes the model files and a `manifest.json` under `MODEL_CACHE_PREFIX` (default `models/v1`) in object storage, so there is no volume to copy by hand. Refresh the prefix before you roll out upgraded workers, so the manifest holds the new snapshot paths. To seed the formula-recognition model files, build the CLI with formula recognition. The uploader includes only the formula files present in the staging cache, and cache sync succeeds with a partial set. With egress blocked, upload the full set before you use `layout.formula_model`. A missing file makes extraction keep the region's plain text and report a processing warning. If you enable `worker.formulaWarmup.enabled` or `workerGpu.formulaWarmup.enabled`, the same missing file fails worker startup. In the cluster, set `worker.modelCache.strategy: objectStorage` and `worker.modelCache.objectStorage.required: true`. The chart's `sync-models` init container then copies the manifest's files into each pod, verifies checksums and blocks the pod if the sync fails. Set `dataLoader.enabled: true` to keep one node-local copy instead of one per pod. If the data loader already tried to sync the old manifest, restart its DaemonSet after the upload.
 
 - **The RAG service** seeds its own cache the same way. Run `rag --upload-cache` against its bucket prefix (default `models/rag/v1`), then set `rag.modelCache.strategy: objectStorage`. The chart refuses to render an offline RAG pod (`HF_HUB_OFFLINE` or `HUGGINGFACE_HUB_OFFLINE`) unless `rag.modelCache.objectStorage.required` is `true`, because a fresh pod otherwise fails on its first embed and cannot recover. Size `rag.modelCache.objectStorage.manifestSize` from the manifest the uploader writes.
-- **The offline flag and Tesseract behavior** are identical. Set `HF_HUB_OFFLINE=1` on `worker`, `worker-gpu` and `rag` through each service's `extraEnv`. The same eight bundled languages ship in the worker image, with the same fetch-on-miss fallback for anything else.
+- **The offline flag and Tesseract behavior** are identical. Set `HF_HUB_OFFLINE=1` on `worker`, `worker-gpu` and `rag` through each service's `extraEnv`. The same ten bundled languages ship in the worker image, with the same fetch-on-miss fallback for anything else.
 - **Licensing** does not use the offline token. Enterprise access is by commercial agreement, with OIDC or JWT authentication and API keys.

@@ -92,6 +92,8 @@ Every outbound call the platform makes emits these: webhook delivery, crawling, 
 | `llm_call_duration_seconds`                                    | Histogram             | seconds | `provider`, `model`                                                                         | LLM provider call latency                              |
 | `extraction_cache_hits_total`, `extraction_cache_misses_total` | Counter               | count   | none                                                                                        | Extraction cache effectiveness                         |
 
+In the processes that run the extraction engine (the worker and Pro), structured extraction emits `structured_extraction_total`, `structured_extraction_duration_seconds`, `structured_extraction_vision_calls_total`, `structured_extraction_tokens_total`, `structured_extraction_cache_hits_total`, `structured_extraction_cache_misses_total`, `structured_extraction_fallback_total` and the confidence histograms `structured_extraction_text_confidence` and `structured_extraction_final_confidence`. The result cache emits `cache_requests_total`, `cache_purge_total` and `cache_corruption_total`, labelled by `namespace` and `result` (corruption by tier).
+
 The worker also emits a long tail of crawl fan-out and reaper counters, such as `crawl_documents_discovered_total`, `crawl_children_spawned_total`, `crawl_quota_exhaustion_total` and `worker_reaper_stuck_jobs_failed_total`. List them from the `/metrics` endpoint of a running worker.
 
 ### Webhook
@@ -114,14 +116,19 @@ One name differs between tiers. Pro emits `audit_write_failures_total`, while th
 
 Pro adds these metrics:
 
-| Metric                                   | Type    | Unit         | Labels                                                     | Description                                                     |
-| ---------------------------------------- | ------- | ------------ | ---------------------------------------------------------- | --------------------------------------------------------------- |
-| `xberg_license_valid`                    | Gauge   | 0 or 1       | none                                                       | 1 if the license is currently valid                             |
-| `xberg_license_expiry_timestamp_seconds` | Gauge   | Unix seconds | none                                                       | License expiry (0 if none or invalid)                           |
-| `xberg_license_state`                    | Gauge   | 0 or 1       | `state` (`valid`, `grace`, `expired`, `invalid`, `absent`) | One series per label, with `1` for the current state            |
-| `integration_kek_loaded_key_fingerprint` | Gauge   | word         | `word` (0 to 3)                                            | Non-secret proof of which key-encryption key the process loaded |
-| `data_volume_available_bytes`            | Gauge   | bytes        | none                                                       | Free space on the filesystem behind the `fs` document store     |
-| `data_volume_sample_failures_total`      | Counter | count        | none                                                       | Failed free-space samples                                       |
+| Metric                                                                  | Type    | Unit         | Labels                                                                         | Description                                                                      |
+| ----------------------------------------------------------------------- | ------- | ------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `xberg_license_valid`                                                   | Gauge   | 0 or 1       | none                                                                           | 1 if the license is currently valid                                              |
+| `xberg_license_expiry_timestamp_seconds`                                | Gauge   | Unix seconds | none                                                                           | License expiry (0 if none or invalid)                                            |
+| `xberg_license_state`                                                   | Gauge   | 0 or 1       | `state` (`valid`, `grace`, `expired`, `invalid`, `absent`)                     | One series per label, with `1` for the current state                             |
+| `integration_kek_loaded_key_fingerprint`                                | Gauge   | word         | `word` (0 to 3)                                                                | Non-secret proof of which key-encryption key the process loaded                  |
+| `data_volume_available_bytes`                                           | Gauge   | bytes        | none                                                                           | Free space on the filesystem behind the `fs` document store                      |
+| `data_volume_sample_failures_total`                                     | Counter | count        | none                                                                           | Failed free-space samples                                                        |
+| `pro_upload_retained_unknown_writers`                                   | Gauge   | count        | none                                                                           | Expired upload cleanup records kept for writers whose completion is unknown      |
+| `pro_upload_oldest_unknown_writer_age_seconds`                          | Gauge   | seconds      | none                                                                           | Age of the oldest such record since its upload capability expired                |
+| `pro_abandoned_s3_input_cleanup_candidate_events_total`                 | Counter | count        | `event` (`started`, `acknowledged`, `not_authorized`, `unconfirmed`, `failed`) | Abandoned S3 input cleanup candidates, when `PRO_INPUT_S3_CLEANUP_ENABLED` is on |
+| `pro_abandoned_s3_input_cleanup_sweep_events_total`                     | Counter | count        | `event` (`completed`, `not_authorized`, `failed`)                              | Abandoned input discovery sweeps                                                 |
+| `pro_abandoned_s3_input_cleanup_last_completed_sweep_timestamp_seconds` | Gauge   | Unix seconds | none                                                                           | When the process last finished an authorized sweep                               |
 
 ## Log fields
 

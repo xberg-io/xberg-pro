@@ -145,7 +145,7 @@ If the interruption happened during the storage check, add `--abandon-native-sto
 
 An initial installation that failed or stopped uncertain cannot be retried blindly. Keep the stored challenge identity, clean up its exact test keys, then start again. Never replay the database bootstrap to hide an uncertain admission.
 
-If schema maintenance is interrupted, resume it only with the same chart, values, images and operation. Keep the hook logs and database status, and contact [support](/more/support/) if it cannot finish. Do not clear failed state manually. `recover` does not cover schema maintenance.
+If schema maintenance is interrupted, resume it only with the same chart, values, images and operation. Changed assets cannot resume an active schema receipt. Keep the hook logs and database status, and contact [support](/more/support/) if it cannot finish. Do not clear failed state manually. `recover` does not cover schema maintenance. See also [Schema changes and migration failures](#schema-changes-and-migration-failures).
 
 ## Enterprise: native mode
 
@@ -225,3 +225,153 @@ python3 $S recover-operation --plan ../enterprise-argo-operation.json \
 ```
 
 If a storage check was interrupted, add `--abandon-storage`. As with native mode, it starts a fresh check and deletes nothing. `status-operation` lists the leftover test objects in `cleanup_keys`. Old source ReplicaSets from earlier operations may stay at zero replicas, but live or terminating source pods block finalization.
+
+## Schema changes and migration failures
+
+Schema changes run in chart hooks, not in the operator. These procedures apply when a release changes the database schema.
+
+### Approve a certified online schema change
+
+By default, migrations run in `maintenance` mode, which is disruptive. Set `migrations.mode=online` only when the signed chart contains a certificate for the exact additive transition you are applying. A chart with an empty certificate list supports converged online checks only. Keep the chart, values and certificate file unchanged through the run and any retry.
+
+1. Run `verify.py` on the operator, then install the census and the protected approval routines against the same idle installation and its completed schema receipt. Use the ordinary restricted schema migrator for the census, and a separate provider login that may assume `xberg_role_root` for the protected stage. Pass connections through PostgreSQL service definitions or your secret mechanism.
+
+   ```sh
+   psql 'service=xberg-schema-migrator' -X -v ON_ERROR_STOP=1 \
+     -v online_additive_stage=census -v online_installation="$INSTALLATION_ID" \
+     -v online_receipt_revision="$RECEIPT_REVISION" -v online_schema_digest="$CURRENT_SCHEMA_DIGEST" \
+     -f sql/deployment-online-additive-install.sql
+   psql 'service=xberg-bridge-provider' -X -v ON_ERROR_STOP=1 \
+     -v online_additive_stage=protected -v online_installation="$INSTALLATION_ID" \
+     -v online_receipt_revision="$RECEIPT_REVISION" -v online_schema_digest="$CURRENT_SCHEMA_DIGEST" \
+     -f sql/deployment-online-additive-install.sql
+   ```
+
+2. Review the planner's output for the installation against the chart's certificate before you approve.
+3. In one `READ COMMITTED` transaction as the provider login, assume `xberg_role_root`, call `xberg_deployment_bridge.approve_online_additive_transition`, then call `seal_online_additive_execution` with the same approval UUID, and commit. The approval takes a fresh UUID that expires within 24 hours, the installation, receipt revision, current and target schema digests, the catalog, plan and certificate hashes, product, schema and runtime protocol range, the ordered column steps and the expiry. Take the target digest from the SHA-256 of the packaged `schema.sql` with a `sha256:` prefix, the plan hash from the planner's `source_fingerprint.hash`, the certificate hash from the SHA-256 of `online-transition-certificates.json`, and the catalog hash from `online_additive_catalog_sha256('[]')`.
+4. Upgrade with `migrations.mode=online` and `migrations.onlineApprovalId=<approval UUID>`. The hook keeps using the restricted migrator. Keep the provider credential out of Helm.
+
+To retry the same release, keep the same approval ID. For later releases, supply complete values without `migrations.onlineApprovalId`. With `--reuse-values`, clear it with `--set-string migrations.onlineApprovalId=`. If the source catalog, certified plan or receipt changes before a successful apply, review the new state and approve again. A change outside the certified scope needs the maintenance procedure.
+
+To verify, check that the upgrade hook completed and that the approval shows as consumed in the completed receipt.
+
+### Recover a failed Pro migration
+
+A failure during schema apply, maintenance grant reconciliation, controller API setup or role validation can leave the database on a different contract than the running image expects. When any of these hooks fails, the Pro chart keeps the StatefulSet scaled down and records the original replica count in the annotation `rollback.xberg.io/original-replicas`.
+
+1. Keep the workload scaled down and leave the maintenance fence in place.
+2. Capture the failed hook's ACL diagnostics and the active schema receipt, and send them to [support](/more/support/).
+3. Do not restart the previous image until its exact runtime role contract has been checked against the live database.
+4. For forward recovery, fix the verified cause and rerun the reviewed maintenance upgrade with the same chart, values and images. A newer chart or image can change the receipt's bindings and need a separate recovery.
+
+After the hooks succeed and restore the recorded replica count, verify the replica count, readiness and an authenticated extraction before you route traffic. A recorded count of zero stays zero.
+
+### First upgrade to guarded Enterprise S3 payload cleanup
+
+When you upgrade an Enterprise installation that uses S3 SSE-KMS for staged inputs or extraction context, use the fenced maintenance path:
+
+1. Stop the old API cleanup executors before you apply the schema and reconcile grants.
+2. Quiesce the other workloads that share the database, and hold their reconcilers until the new schema and routine grants are verified.
+3. Keep outstanding cleanup leases. An interrupted delete is retried after its lease expires, and the new executor deletes only the recorded object version.
+
+The upgraded grants include a maintenance-only cleanup guard. Before you return to an older binary, complete a reviewed rollback that restores the previous schema and routine grants, and verify the older binary's role contract.
+
+### First upgrade to fenced Pro webhook delivery
+
+Older Pro relays can release or settle an in-flight webhook delivery by event identity alone, including one already reclaimed by a newer relay. Neither runtime admission nor a route switch stops an older relay that is still running. Before you roll out an image with fenced webhook delivery over a source image that may not support it, use a maintenance transition:
+
+1. Record each legacy writer's replica count and image.
+2. Stop new submissions at ingress and suspend every reconciler that can recreate a legacy writer.
+3. Inventory all writers that share the database, including ones outside the serving release or cluster, and stop them gracefully while the destination is still disabled.
+4. For each legacy Pro StatefulSet, run the read-only check below in its own cluster and namespace. It needs `get` on the StatefulSet and `list` on Pods. For other writer types, confirm the process has exited at its supervisor and keep restart disabled.
+
+```sh
+(
+  set -eu
+  : "${KUBE_CONTEXT:?Set the reviewed context}"
+  : "${PRO_NAMESPACE:?Set the legacy workload namespace}"
+  : "${PRO_STATEFULSET:?Set the legacy StatefulSet name}"
+  kube() {
+    kubectl --context "$KUBE_CONTEXT" --namespace "$PRO_NAMESPACE" --request-timeout=15s "$@"
+  }
+  snapshot=$(kube get statefulset "$PRO_STATEFULSET" -o json)
+  selector=$(printf '%s' "$snapshot" | jq -er '
+    select(.kind == "StatefulSet"
+      and .metadata.deletionTimestamp == null
+      and (.metadata.generation | type == "number")
+      and .status.observedGeneration == .metadata.generation
+      and .spec.replicas == 0
+      and (.status.replicas // 0) == 0
+      and (.status.readyReplicas // 0) == 0
+      and ((.spec.selector.matchExpressions // []) | length) == 0)
+    | .spec.selector.matchLabels
+    | select(type == "object" and length > 0)
+    | to_entries | map(.key + "=" + .value) | join(",")') || {
+      echo 'The legacy StatefulSet has no observed zero-replica revision' >&2
+      exit 1
+    }
+  pods=$(kube get pods --selector "$selector" -o json)
+  printf '%s' "$pods" | jq -e '
+    (.kind == "List" or .kind == "PodList")
+    and (.metadata.continue // "") == "" and .items == []' >/dev/null || {
+    echo 'The legacy Pod inventory is incomplete or still contains Pods' >&2
+    exit 1
+  }
+  current=$(kube get statefulset "$PRO_STATEFULSET" -o json)
+  [ "$snapshot" = "$current" ] || {
+    echo 'The legacy StatefulSet changed during the check' >&2
+    exit 1
+  }
+  echo 'The reviewed legacy StatefulSet is stopped and its Pod selector is empty'
+)
+```
+
+A terminating or unreachable pod still counts. If you forced deletion or a node was unreachable, confirm separately that the old process cannot reconnect or send callbacks. Keep the legacy reconcilers and writers stopped for the whole cutover. The check covers only the named selector, so keep your writer inventory as evidence.
+
+Keep durable jobs and webhook ledger rows in place. After you restart on the fenced single instance, let normal lease expiry recover unfinished attempts, then verify that accepted jobs and callback event IDs survived. A receiver may already have a callback whose acknowledgement was lost, so deduplicate replays by event ID. Roll back or overlap only between images that share the same delivery behavior, and use maintenance for any transition back across this boundary.
+
+## Customer-managed keys for Enterprise S3 inputs
+
+**Available in:** Enterprise
+
+The replicated Enterprise API can require native AWS S3 SSE-KMS for staged inline extraction inputs and their job context. It is off by default and the chart does not enable it. Pro, presigned upload tickets and protected results are outside this option.
+
+Before you publish an API revision with it, qualify the installation's versioned general-purpose S3 bucket:
+
+- The API can use the key and write, the worker can read the exact version and decrypt, and the cleanup role can delete versions.
+- The bucket uses an installation-owned storage root.
+- A bucket policy denies writes with missing or wrong SSE-KMS headers on the `documents/` and `job-context/` prefixes, including any storage root. The policy must also cover the previous API revision and stay in place during rollback.
+- Existing object versions and key access stay available while their jobs or cleanup leases are live.
+
+Then create the canary object. Write the exact bytes `synthetic S3 protected input canary v1` (no trailing newline) with the chosen key to `deployment-challenges/v1/<installation-id>/api-s3-protected-inputs` under the same storage root, and record the S3 version ID. Publish the three variables together in the API's digest-qualified pod template:
+
+| Variable                                       | Value                                                  |
+| ---------------------------------------------- | ------------------------------------------------------ |
+| `ENTERPRISE_PROTECTED_INPUT_ENCRYPTION`        | `s3-kms`                                               |
+| `ENTERPRISE_PROTECTED_INPUT_S3_KMS_KEY_ARN`    | Canonical key ARN in the bucket's region and partition |
+| `ENTERPRISE_PROTECTED_INPUT_S3_CANARY_VERSION` | The recorded non-null object version                   |
+
+API readiness and protected submissions check the canary's version, key metadata and content. To verify, make synthetic writes under the protected prefixes before customer traffic, and confirm a wrong-key write is denied. The API checks the returned version and key of each staged object. Each input and context must fit within 5 MiB. Keep old versions readable while you qualify new keys.
+
+### Record the bucket policy for a GCS generation
+
+After a generation is admitted and the installation has no active transition, you can record the bucket's encryption policy against that generation. Take the installation, generation, epoch, image and configuration digests, bucket and storage root from the admitted generation. Take the project number, bucket location (uppercase), metageneration and versionless Cloud KMS key name from your reviewed bucket configuration. Keep the expected metageneration fixed for the attempt so drift is refused.
+
+Set `GCS_POLICY_OBSERVATION_DATABASE_URL` from your secret store, using a non-superuser schema-owner login over TLS or a trusted local Unix socket. Pass a short-lived Google access token with `storage.buckets.get` on the bucket as one `Bearer <token>` line on standard input:
+
+```sh
+xberg-admin record-gcs-bucket-policy-observation \
+  --installation "$INSTALLATION_ID" --generation "$GENERATION_ID" --epoch "$EPOCH" \
+  --image-digest "$IMAGE_DIGEST" --config-digest "$CONFIG_DIGEST" \
+  --bucket "$BUCKET" --root "$STORAGE_ROOT" --project-number "$PROJECT_NUMBER" \
+  --location "$BUCKET_LOCATION" --metageneration "$METAGENERATION" \
+  --default-kms-key "$CRYPTO_KEY" <&3
+```
+
+Omit `--root` when the configuration uses the bucket root. The command stores the policy digest, metageneration and observation time. A provider failure, mismatch or concurrent change leaves the last successful observation in place. The record is evidence at that time only, so verify object generations, key access and each upload path separately before you enable protected traffic.
+
+### Inventory encryption and key changes
+
+Track object storage, the database, processing volumes and integration secrets separately. The S3 setting above covers only eligible inline documents and job context. Verify encryption for database records, RAG text and indexes, WAL, replicas, backups, temporary volumes and caches in the way your platform provides it.
+
+For each storage namespace, record the write and read identities, key policy, retained versions and restore procedure. Before you change a key, qualify writes with the new key and drain outstanding upload tickets. Then exercise an existing read, a new write, a wrong-key rejection and a restore with synthetic content. Keep the previous key accessible until retained versions and backups can be restored or have expired. For Azure, record the container's encryption scope and its key-policy history, because an object's scope name does not show which key protected it.
