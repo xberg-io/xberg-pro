@@ -21,14 +21,14 @@ This repository holds documentation only. Xberg Pro and Xberg Enterprise are pro
 
 ## Tiers
 
-|               | Core                       | Pro                            | Enterprise                                    |
-| ------------- | -------------------------- | ------------------------------ | --------------------------------------------- |
-| License       | MIT                        | Proprietary                    | Proprietary                                   |
-| Availability  | Released                   | Released                       | By arrangement, with private images and chart |
-| Runs as       | Library, CLI, Docker, Helm | Docker Compose or Helm         | Helm, on your Kubernetes cluster              |
-| Scale ceiling | One process                | One node                       | A cluster                                     |
-| Price         | Free                       | Per license, by contract       | Per license, by contract                      |
-| Support       | GitHub, Discord            | Email, dedicated Slack channel | Private channel, contractual SLA              |
+|               | Core                       | Pro                            | Enterprise                                   |
+| ------------- | -------------------------- | ------------------------------ | -------------------------------------------- |
+| License       | MIT                        | Proprietary                    | Proprietary                                  |
+| Availability  | Released                   | Released                       | By arrangement: public chart, private images |
+| Runs as       | Library, CLI, Docker, Helm | Docker Compose or Helm         | Helm, on your Kubernetes cluster             |
+| Scale ceiling | One process                | One node                       | A cluster                                    |
+| Price         | Free                       | Per license, by contract       | Per license, by contract                     |
+| Support       | GitHub, Discord            | Email, dedicated Slack channel | Private channel, contractual SLA             |
 
 The full comparison is in [Core, Pro and Enterprise](https://pro.xberg.io/overview/tiers/).
 

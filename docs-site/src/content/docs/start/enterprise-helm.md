@@ -1,11 +1,11 @@
 ---
 title: Install Xberg Enterprise with Helm
-description: Deploy the Xberg Enterprise microservices on your Kubernetes cluster with the delivered chart, from prerequisites and database bootstrap to verification and upgrade.
+description: Deploy the Xberg Enterprise microservices on your Kubernetes cluster from the public chart, from prerequisites and database bootstrap to verification and upgrade.
 sidebar:
   order: 3
 ---
 
-Xberg Enterprise is commercially licensed and delivered by arrangement. You receive the Helm chart, registry credentials for the product images and a license agreement. A chart archive does not grant rights to use the software, so read the bundled `LICENSE` and your commercial agreement. To arrange access, contact [contact@xberg.io](mailto:contact@xberg.io).
+Xberg Enterprise is commercially licensed. The Helm chart is a public download; the Enterprise service images are private, and you receive registry credentials for them with your agreement. A chart archive does not grant rights to use the software, so read the bundled `LICENSE` and your commercial agreement. To arrange access, contact [contact@xberg.io](mailto:contact@xberg.io).
 
 Enterprise runs as separate services on your cluster: an API, a backend for projects and members, RAG, workers that scale to zero with KEDA, and webhook delivery. They share PostgreSQL, NATS JetStream and object storage. For a single container instead, use [Xberg Pro](/start/pro-docker/). See [Architecture](/concepts/architecture/) for how the services fit together.
 
@@ -62,11 +62,11 @@ Migration hooks quiesce workloads before schema changes under both adapters. Nat
 
 ## Chart and images
 
-Set `ENTERPRISE_CHART` to the chart reference or archive path you received, and `VERSION` to the delivered version. Download the chart and render the default values:
+Pull the chart from the public registry. Set `VERSION` to the release named in your agreement, or the latest published release. Download the chart and render the default values:
 
 ```shell
-export ENTERPRISE_CHART=REPLACE_WITH_DELIVERED_CHART_REFERENCE
-export VERSION=REPLACE_WITH_DELIVERED_VERSION
+export ENTERPRISE_CHART=oci://us-central1-docker.pkg.dev/xberg-public-assets/helm-charts/xberg-enterprise
+export VERSION=REPLACE_WITH_RELEASE_VERSION
 helm pull "$ENTERPRISE_CHART" --version "$VERSION" --untar
 export ENTERPRISE_CHART_DIR="$PWD/xberg-enterprise"
 helm show values "$ENTERPRISE_CHART_DIR" > values.yaml
