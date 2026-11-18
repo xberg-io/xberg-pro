@@ -21,6 +21,7 @@ A malformed or out-of-range value stops startup and names the variable. Pro neve
 | Size and tune the instance                    | [Tuning](#tuning), [Caching](#caching), [Database connections](#database-connections)                                                       |
 | Allow long extractions                        | [Timeouts and shutdown](#timeouts-and-shutdown), [Long extractions](#long-extractions)                                                      |
 | Use models for RAG, OCR and structured output | [RAG runtime](#rag-runtime), [Structured extraction](#structured-extraction), [Extraction models and limits](#extraction-models-and-limits) |
+| Serve a private MCP endpoint                  | [Private MCP listener](#private-mcp-listener)                                                                                               |
 | Monitor and log                               | [OTLP export](#otlp-trace-log-and-metric-export), [Logging](#logging-and-deployment-label)                                                  |
 
 ## Required
@@ -443,6 +444,8 @@ The chart derives `PRO_SHUTDOWN_DRAIN_SECS` and rejects it as a `configMap` key.
 | `shutdown.killMarginSeconds`            | 10      | Seconds held back for the telemetry flush. The drain is the grace period minus this margin, 3710 s by default. At least 20 s must remain.           |
 | `supervisor.shutdownGracePeriodSeconds` | 3690    | See `PRO_SUPERVISOR_SHUTDOWN_GRACE_SECS`.                                                                                                           |
 
+In a replicated generation, the chart reads `deployment.terminationGracePeriodSeconds` (default 60) instead. The drain is that value minus 20 s, and the supervisor grace is that value minus 10 s.
+
 With plain `docker run`, set `PRO_SHUTDOWN_DRAIN_SECS` and the container stop timeout (`docker stop --time`) together.
 
 ### Long extractions
@@ -473,17 +476,50 @@ With `docker run`, pass the same two names with `-e`. A request can still ask fo
 
 ## Retention
 
-| Variable                          | Default | Description                                                                                                                                                                 |
-| --------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RAG_AUDIT_RETENTION_DAYS`        | 90      | Days of RAG retrieval audit rows to keep. Pro drops a monthly partition once the whole month is older. 1 to 36500. `0` is rejected and stops startup.                       |
-| `PRO_UPLOAD_REPLAY_GRACE_SECS`    | 86400   | Time after an upload expires during which a confirmed batch can still be re-confirmed idempotently. Above 0. Raise it when clients may retry after long outages.            |
-| `PRO_UPLOAD_GC_INTERVAL_SECS`     | 60      | Gap between upload cleanup sweeps. Above 0.                                                                                                                                 |
-| `PRO_UPLOAD_GC_BATCH_LIMIT`       | 16      | Expired batches, and separately orphaned objects, claimed per project in one sweep. 1 to 100.                                                                               |
-| `PRO_UPLOAD_GC_PROJECT_LIMIT`     | 16      | Projects examined in one sweep. 1 to 100.                                                                                                                                   |
-| `PRO_RESULT_ACCESS_POLICY_EPOCH`  | unset   | Policy version recorded on each newly admitted job. Set it together with `PRO_RESULT_ACCESS_LIFETIME_SECS`. See [Result access lifetime](/operate/result-access-lifetime/). |
-| `PRO_RESULT_ACCESS_LIFETIME_SECS` | unset   | Seconds after completion during which a new job's result stays readable. Setting only one of the two result-access variables stops startup.                                 |
+| Variable                                  | Default | Description                                                                                                                                                                                                                                                                       |
+| ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RAG_AUDIT_RETENTION_DAYS`                | 90      | Days of RAG retrieval audit rows to keep. Pro drops a monthly partition once the whole month is older. 1 to 36500. `0` is rejected and stops startup.                                                                                                                             |
+| `PRO_UPLOAD_REPLAY_GRACE_SECS`            | 86400   | Time after an upload expires during which a confirmed batch can still be re-confirmed idempotently. Above 0. Raise it when clients may retry after long outages.                                                                                                                  |
+| `PRO_UPLOAD_GC_INTERVAL_SECS`             | 60      | Gap between upload cleanup sweeps. Above 0.                                                                                                                                                                                                                                       |
+| `PRO_UPLOAD_GC_BATCH_LIMIT`               | 16      | Expired batches, and separately orphaned objects, claimed per project in one sweep. 1 to 100.                                                                                                                                                                                     |
+| `PRO_UPLOAD_GC_PROJECT_LIMIT`             | 16      | Projects examined in one sweep. 1 to 100.                                                                                                                                                                                                                                         |
+| `PRO_RESULT_ACCESS_POLICY_EPOCH`          | unset   | Policy version recorded on each newly admitted job, a positive integer. Set it together with `PRO_RESULT_ACCESS_LIFETIME_SECS`. See [Result access lifetime](/operate/result-access-lifetime/).                                                                                   |
+| `PRO_RESULT_ACCESS_LIFETIME_SECS`         | unset   | Seconds after completion during which a new job's result stays readable, 1 to 315360000. Setting only one of the two result-access variables stops startup. Expiry limits access and does not delete stored objects.                                                              |
+| `PRO_RESULT_S3_CLEANUP_ENABLED`           | `false` | Delete expired main results from AWS S3 by exact object version. Needs an admitted replicated extraction-only generation, bucket versioning and `s3:DeleteObjectVersion` on the result prefix.                                                                                    |
+| `PRO_INPUT_S3_CLEANUP_ENABLED`            | `false` | Delete abandoned, never-attached extraction inputs from AWS S3 by exact object version. Same requirements as result cleanup, on the `documents/` prefix.                                                                                                                          |
+| `PRO_CONNECTOR_RESULT_REMOVAL_GRACE_SECS` | unset   | Standalone Pro only. Seconds, 0 to 315360000, that results of newly admitted S3 connector documents stay readable after the connector records the source removal. `0` expires access immediately. Unset keeps them readable. See [Source connectors](/guides/source-connectors/). |
 
 Extraction results live in object storage under `results/{project_id}/{job_id}.json` and stay until the project is erased. Pro deletes expired RAG ingest job records 7 days after submission. Upload cleanup removes expired staging data and never removes the recovery source of an accepted job. Raise the batch or project limit only when cleanup falls behind.
+
+## Private MCP listener
+
+Pro can serve MCP (version 2026-07-28) on a private `/mcp` listener. It is off by default, the public REST API never serves it, and each listener serves one mode. Clients send a project API key as an `Authorization: Bearer` credential.
+
+| Mode         | Tools                                                                        | Requires                                                                                                                       |
+| ------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `rag`        | `list_collections`, `list_documents`, `retrieve`                             | Singleton Pro, the standard data policy and `PRO_RAG_ENABLED=true`.                                                            |
+| `extraction` | `extract_document`, `get_extraction_job_status`, `get_extraction_job_result` | A registered replicated generation with `extraction_only`, result access lifetime, and versioned AWS S3 or Azure Blob storage. |
+
+| Variable                 | Default | Description                                                                                                                                   |
+| ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MCP_LISTENER_ENABLED`   | `false` | Start the listener.                                                                                                                           |
+| `MCP_LISTENER_MODE`      | `rag`   | `rag` or `extraction`.                                                                                                                        |
+| `MCP_LISTENER_ADDR`      | none    | Socket address with a fixed port, such as `127.0.0.1:8095`. Required when enabled.                                                            |
+| `MCP_ALLOWED_HOSTS`      | none    | Comma-separated `host:port` authorities the listener accepts. Include the authority the client sends. Required when enabled.                  |
+| `MCP_ALLOWED_ORIGINS`    | empty   | Comma-separated HTTP or HTTPS origins with explicit ports. Leave it empty for clients that send no `Origin` header.                           |
+| `MCP_CURSOR_SIGNING_KEY` | none    | 32 bytes as unpadded base64url, which signs pagination cursors. Use the same key on every replica behind one listener. Required when enabled. |
+
+Invalid values stop startup. On Helm, set the chart values instead. The chart rejects these variables in `configMap`:
+
+| Chart value                               | Default | Description                                                                                                                                         |
+| ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp.enabled`                             | `false` | Enable the listener.                                                                                                                                |
+| `mcp.mode`                                | `rag`   | `rag` or `extraction`.                                                                                                                              |
+| `mcp.port`                                | 8095    | Listener port. It must differ from the chart's other ports and from `PRO_BIND_ADDR`.                                                                |
+| `mcp.cursorSigningKeySecret.name`, `.key` | empty   | Secret and key holding the signing key. Required when enabled.                                                                                      |
+| `migrations.mcpRagReleaseExecute`         | `false` | `rag` mode only. Grants the application login the retrieval routines during the maintenance grants Job. A reconciliation with `false` removes them. |
+
+The chart binds the listener to `127.0.0.1:<port>`, allows `127.0.0.1:<port>` and `localhost:<port>`, and sets no origins. It adds no Service or ingress route. Reach it with `kubectl port-forward pod/<pod-name> 8095:8095` and connect to `http://127.0.0.1:8095/mcp`. Outside Helm, apply the grants in your maintenance procedure with `MCP_RAG_RELEASE_EXECUTE=true`. REST keeps serving while the listener waits for the grants.
 
 ## OTLP trace, log and metric export
 
