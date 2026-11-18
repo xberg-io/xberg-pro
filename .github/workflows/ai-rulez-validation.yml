@@ -11,6 +11,7 @@ on:
       - ".ai-rulez/**"
       - ".gitignore"
       - ".github/workflows/ai-rulez-validation.yml"
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
