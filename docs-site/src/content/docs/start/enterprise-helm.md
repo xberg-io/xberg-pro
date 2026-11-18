@@ -23,7 +23,7 @@ The install has seven steps, and each ends with a check. Do not continue until t
 
 - Helm 4, `kubectl`, `yq` and `curl` on the machine that runs the install, and a Kubernetes version within [Helm's support matrix](https://helm.sh/docs/topics/version_skew/). Any distribution works: EKS, GKE, AKS or on-premises.
 - Nodes on `linux/amd64` or `linux/arm64`. The api, backend, worker, webhook, rag and pro images are published for both under one tag, so mixed pools need no per-node tag. The GPU worker, `worker-gpu`, is `linux/amd64` only. Schedule it on amd64 nodes, for example with `workerGpu.nodeSelector."kubernetes.io/arch": amd64`.
-- PostgreSQL 15 to 18 (managed or self-hosted) with pgvector 0.8.0 or newer. pgvectorscale is optional; see [PostgreSQL extensions](#postgresql-extensions).
+- PostgreSQL 15 to 18 (managed or self-hosted) with pgvector 0.8.0 or newer. `pgvectorscale` is optional; see [PostgreSQL extensions](#postgresql-extensions).
 - `psql` and the GNU `timeout` command on the install machine, which must reach the database, for the bootstrap.
 - Authenticated NATS JetStream 2.10 or newer. Enable the bundled NATS dependency, or provide your own.
 - Persistent object storage: GCS, S3, Azure Blob Storage or an S3-compatible store such as RustFS.
@@ -109,7 +109,7 @@ Enterprise uses four extensions on every deployment, plus one optional extension
 | `pgvector`                 | Vector types and similarity-search operators          |
 | `pgvectorscale` (optional) | StreamingDiskANN index for billion-vector collections |
 
-Without `pgvectorscale`, set `vectorstore.defaultIndexMethod: "hnsw"` (environment variable `XBERG_VECTORSTORE_DEFAULT_INDEX_METHOD=hnsw`) so new collections default to HNSW. pgvector itself supports HNSW, and it is comfortable up to roughly 10 million vectors per index. When `pgvectorscale` is missing, the migration Job emits a notice and continues. pgvectorscale supports PostgreSQL 13 to 17.
+Without `pgvectorscale`, set `vectorstore.defaultIndexMethod: "hnsw"` (environment variable `XBERG_VECTORSTORE_DEFAULT_INDEX_METHOD=hnsw`) so new collections default to HNSW. The `pgvector` extension itself supports HNSW, and it is comfortable up to roughly 10 million vectors per index. When `pgvectorscale` is missing, the migration Job emits a notice and continues. `pgvectorscale` supports PostgreSQL 13 to 17.
 
 On managed databases:
 

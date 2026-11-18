@@ -15,7 +15,7 @@ includes = ["mise-tasks", "mise-tasks/shared.toml"]
 [tasks."docs:lint:links"]
 description = "Check internal links with lychee (root-relative links resolve against the Starlight content root)"
 # openapi-viewer.html is a static asset in docs-site/public, outside the content root lychee resolves against. ~keep
-run = '''lychee --offline --root-dir "$PWD/docs-site/src/content/docs" --fallback-extensions md,mdx --exclude 'openapi-viewer\.html$' docs-site/src/content/docs README.md'''
+run = '''lychee --offline --include-fragments --root-dir "$PWD/docs-site/src/content/docs" --fallback-extensions md,mdx --exclude 'openapi-viewer\.html$' docs-site/src/content/docs README.md'''
 
 [tasks."docs:lint:prose"]
 description = "Lint prose with textlint"
