@@ -1,3 +1,5 @@
+required_version = ">=0.36.0"
+
 [defaults]
 line_length = 120
 line_ending = "lf"
@@ -49,7 +51,11 @@ file_safety = { exclude = [
   "/mise-tasks/.shared/**",
 ] }
 
-[lint.uncomment]
+[engines.typos]
+# typos is opt-in in poly v2; this keeps the v1 default (on).
+enabled = true
+
+[engines.uncomment]
 enabled = true
 remove_todos = false
 remove_fixme = false
@@ -88,7 +94,9 @@ preserve_patterns = [
   "limitations under the license",
 ]
 
-[per-file-ignores]
+[per_file_ignores]
+# astro:content is an Astro virtual module typed by generated .astro/ files, which are not committed. ~keep
+"docs-site/src/content.config.ts" = ["TS2307"]
 "e2e/**" = ["comment", "doc-comment"]
 "**/e2e/**" = ["comment", "doc-comment"]
 "test_apps/**" = ["comment", "doc-comment"]
@@ -104,3 +112,26 @@ id = "ai-rulez"
 git = "https://github.com/Goldziher/ai-rulez.git"
 revision = "v5"
 hooks = ["ai-rulez-validate"]
+
+[engines.skif]
+enabled = true
+dir = "docs-site"
+
+[engines.tsrs]
+enabled = true
+dir = "docs-site"
+
+[engines.harper]
+enabled = true
+# Off: rules that contradict the org's sentence-case headings and no-Oxford-comma style, or misread technical prose
+# (denylist, MB, stdin). ~keep
+ignore = [
+  "UseTitleCase",
+  "OxfordComma",
+  "SplitWords",
+  "OrthographicConsistency",
+  "ExpandMemoryShorthands",
+  "ExpandStandardInputAndOutput",
+  "ExpandConfiguration",
+  "ExpandMinimum",
+]
